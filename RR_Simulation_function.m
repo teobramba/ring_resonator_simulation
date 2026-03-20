@@ -34,206 +34,176 @@ f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
 
 P_gold = ring_simulate(f, f_0_gold, R_real, B_gold, ng, neff, gamma); % [P_thru, P_drop]
 
-% %% 3. Plot the through and drop power (Golden Reference)
-% figure;
-% plot(f, P_gold(:, 1), 'b-', 'LineWidth', 1.5); hold on;
-% plot(f, P_gold(:, 2), 'r-', 'LineWidth', 1.5);
-% xlabel('Frequency (Hz)');
-% ylabel('Power (W)');
-% title('Ring Resonator Transmission and Drop Power');
-% legend('Through Power', 'Drop Power');
-% grid on;
 
-
-% %% 4. Define the DUT and Setup Animation Dashboard
-% R_error = 10e-9;            % Lithography error on ring radius (10 nm)
-% R_DUT = R_real + R_error;   % Physical radius of the DUT
+% %% --- Define the "LED" Source Profile ---
 % 
-% % Power sweep vector: 0 to 30 mW in 100 steps
-% P_sweep = linspace(0, 30e-3, 100); 
-% Total_Power = zeros(size(P_sweep)); % Pre-allocate array for integrated power
+% % Source standard deviation (sigma) as function of gold FSR
+% sigma_LED = 2 * FSR_gold; 
 % 
-% % --- Combined Figure Setup ---
-% figure('Color', 'w', 'Position', [100, 100, 1500, 700]);
+% % Create the unnormalized Gaussian shape centered at f_0_gold
+% PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
 % 
-% % Left Subplot: Spectral Animation
-% ax1 = subplot(1, 2, 1);
-% plot(f / 1e12, P_gold(:, 1), 'b', 'LineWidth', 1.5); hold on;
-% plot(f / 1e12, P_gold(:, 2), 'r', 'LineWidth', 1.5);
+% % Normalize it so the total area under the LED curve equals Ptot (1 mW)
+% % Integrate the shape using trapz to find its current arbitrary area,
+% % then divide by that area and multiply by our desired total power.
+% normalization_factor = Ptot / trapz(f, PSD_LED_shape);
+% PSD_LED = PSD_LED_shape * normalization_factor;
 % 
-% % Initialize DUT and Product plot handles
-% h_thru_DUT = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
-% h_drop_DUT = plot(f / 1e12, NaN(size(f)), 'r--', 'LineWidth', 1.5);
-% h_prod_DD  = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2.5); 
-% 
-% xlabel('Frequency (THz)'); ylabel('Transmission');
-% grid on; ylim([0 1.1]); xlim([min(f)/1e12 max(f)/1e12]);
-% legend('Gold Thru', 'Gold Drop', 'DUT Thru', 'DUT Drop', 'Drop-Drop Product', ...
-%     'Location', 'southoutside', 'NumColumns', 2);
-% 
-% % Right Subplot: Integrated Power Tracker
-% ax2 = subplot(1, 2, 2);
-% h_power_track = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r');
-% xlabel('Heater Power (mW)');
-% ylabel('Total Cascaded Output Power (mW)');
-% title('Real-Time Power Integration');
-% grid on; 
-% xlim([0 max(P_sweep)*1000]); 
-% ylim([0 Ptot*1000]); 
-% 
-% %% 5. Thermo-Optic Tuning Loop
-% fprintf('--- Starting Tuning Sweep ---\n');
-% P_dens = Ptot / fspan; % Power spectral density for the integral
-% 
-% for i = 1:length(P_sweep)
-%     P = P_sweep(i);
-% 
-%     % 1. Electrical & Thermal Physics
-%     dT = P * R_thermal;           
-% 
-%     % 2. Index Shift
-%     neff_DUT = neff + (d_neff_th * dT);
-% 
-%     % 3. Simulate heated DUT
-%     P_DUT = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_DUT, gamma);
-% 
-%     % 4. Compute Cascaded Product (Drop-Drop configuration)
-%     P_DD = P_gold(:, 2) .* P_DUT(:, 2);
-% 
-%     % 5. Compute Integral of Power Spectral Density
-%     Total_Power(i) = trapz(f, P_DD * P_dens);
-% 
-%     % 6. Update the Spectral Animation Plot
-%     h_thru_DUT.YData = P_DUT(:, 1);
-%     h_drop_DUT.YData = P_DUT(:, 2);
-%     h_prod_DD.YData  = P_DD;
-% 
-%     % Update the title of the left subplot specifically
-%     title(ax1, sprintf('Heat Power: %.2f mW | \\DeltaT: %.2f °C', P * 1000, dT));
-% 
-%     % 7. Update the Power Tracking Plot
-%     h_power_track.XData = P_sweep(1:i) * 1000;         
-%     h_power_track.YData = Total_Power(1:i) * 1000;     
-% 
-%     drawnow;
-% end
-% 
-% %% 6. Post-Sweep Analysis
-% % Find the exact power that generated the maximum output
-% [max_power_out, max_idx] = max(Total_Power);
-% optimal_heater_power = P_sweep(max_idx);
-% 
-% fprintf('Sweep complete.\n');
-% fprintf('Optimal Heater Power to compensate 10nm error: %.2f mW\n', optimal_heater_power * 1000);
-% fprintf('Maximum Recovered Output Power: %.2f mW\n', max_power_out * 1000);
-
-
+% % Optional: Plot the LED spectrum just to verify it looks correct
+% figure('Name', 'LED Input Spectrum', 'Color', 'w');
+% plot(f / 1e12, PSD_LED, 'k', 'LineWidth', 2);
+% title('Tapered LED Input Power Spectral Density');
+% xlabel('Frequency (THz)'); ylabel('Power Density (W/Hz)'); grid on;
 
 
 %% 4. Define the DUT and Setup Full Dashboard
-R_error = 2e-6;%113.578e-6/3;            % Lithography error on ring radius (10 nm)
+R_error = 1000e-9;            % Lithography error on ring radius (10 nm)
 R_DUT = R_real + R_error;   % Physical radius of the DUT
 
 % Power sweep vector: 0 to 30 mW in 100 steps
 P_sweep = linspace(0, 30e-3, 100); 
-Total_Power = zeros(4, length(P_sweep)); % 4 rows to store data for TT, DD, DT, TD
+
+% --- Pre-allocate (create empty arrays to save memory) 2D arrays for all PSDs ---
+% Each matrix holds the PSD for all frequencies (rows) at every sweep step (columns)
+PSD_TT = zeros(length(f), length(P_sweep));
+PSD_DD = zeros(length(f), length(P_sweep));
+PSD_DT = zeros(length(f), length(P_sweep));
+PSD_TD = zeros(length(f), length(P_sweep));
+
+% Pre-allocate arrays for the total integrated power
+Power_TT = zeros(1, length(P_sweep));
+Power_DD = zeros(1, length(P_sweep));
+Power_DT = zeros(1, length(P_sweep));
+Power_TD = zeros(1, length(P_sweep));
+
+% Split Golden Standard into named variables
+P_thru_gold = P_gold(:, 1);
+P_drop_gold = P_gold(:, 2);
 
 % --- Combined Figure Setup ---
-figure('Name', 'Full Port Permutation Dashboard', 'Color', 'w', 'Position', [50, 50, 1800, 850]);
+figure('Name', 'Full Port Permutation Dashboard', 'Color', 'w', 'Position', [50, 50, 1400, 700]);
 
-% Mapping for the 4 permutations: [Gold_Port, DUT_Port]
-% 1 = Through, 2 = Drop
-port_map = [1, 1;   % 1: Through-Through
-            2, 2;   % 2: Drop-Drop
-            2, 1;   % 3: Drop-Through
-            1, 2];  % 4: Through-Drop
+% 1. Setup Through-Through (Column 1)
+ax_TT = subplot(2, 4, 1);
+plot(f / 1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on;
+h_DUT_TT  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
+h_prod_TT = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
+title('Through-Through'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+legend('Gold Thru', 'DUT Thru', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
 
-titles = {'Through-Through', 'Drop-Drop', 'Drop-Through', 'Through-Drop'};
+subplot(2, 4, 5);
+h_track_TT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
+title('Power Tracking: TT'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
 
-% Pre-allocate plot handles and axis arrays for the loop
-h_DUT = cell(1, 4);
-h_prod = cell(1, 4);
-h_track = cell(1, 4);
-ax_spectra = zeros(1, 4);
+% 2. Setup Drop-Drop (Column 2)
+ax_DD = subplot(2, 4, 2);
+plot(f / 1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on;
+h_DUT_DD  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
+h_prod_DD = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
+title('Drop-Drop'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+legend('Gold Drop', 'DUT Drop', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
 
-for i = 1:4
-    % --- Top Row: Spectral Plots (Indices 1 to 4) ---
-    ax_spectra(i) = subplot(2, 4, i);
-    
-    % Plot the static Golden standard line
-    if port_map(i, 1) == 1
-        plot(f / 1e12, P_gold(:, 1), 'b', 'LineWidth', 1.5); hold on;
-        gold_name = 'Gold Thru';
-    else
-        plot(f / 1e12, P_gold(:, 2), 'r', 'LineWidth', 1.5); hold on;
-        gold_name = 'Gold Drop';
-    end
-    
-    % Initialize the dynamic DUT line (Start as NaN)
-    if port_map(i, 2) == 1
-        h_DUT{i} = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
-        dut_name = 'DUT Thru';
-    else
-        h_DUT{i} = plot(f / 1e12, NaN(size(f)), 'r--', 'LineWidth', 1.5);
-        dut_name = 'DUT Drop';
-    end
-    
-    % Initialize the dynamic Product line
-    h_prod{i} = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
-    
-    title(ax_spectra(i), titles{i});
-    xlabel('Frequency (THz)'); ylabel('Transmission');
-    grid on; ylim([0 1.1]); xlim([min(f)/1e12 max(f)/1e12]);
-    legend(gold_name, dut_name, 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
-    
-    % --- Bottom Row: Power Integrations (Indices 5 to 8) ---
-    subplot(2, 4, i + 4);
-    h_track{i} = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
-    title(['Power Tracking: ', titles{i}]);
-    xlabel('Heater Power (mW)'); ylabel('Output Power (mW)');
-    grid on;
-    xlim([0 max(P_sweep)*1000]);
+subplot(2, 4, 6);
+h_track_DD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
+title('Power Tracking: DD'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
 
-    %ylim([0, 1]);       % remove for autoscale
-end
+% 3. Setup Drop-Through (Column 3)
+ax_DT = subplot(2, 4, 3);
+plot(f / 1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on;
+h_DUT_DT  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
+h_prod_DT = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
+title('Drop-Through'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+legend('Gold Drop', 'DUT Thru', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
+
+subplot(2, 4, 7);
+h_track_DT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
+title('Power Tracking: DT'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+
+% 4. Setup Through-Drop (Column 4)
+ax_TD = subplot(2, 4, 4);
+plot(f / 1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on;
+h_DUT_TD  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
+h_prod_TD = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
+title('Through-Drop'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+legend('Gold Thru', 'DUT Drop', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
+
+subplot(2, 4, 8);
+h_track_TD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
+title('Power Tracking: TD'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
 
 %% 5. Thermo-Optic Tuning Loop
 fprintf('--- Starting Full Tuning Sweep ---\n');
-P_dens = Ptot / fspan; % Power spectral density for the integral
+P_dens = Ptot / fspan; % Base Power Spectral Density (W/Hz)
 
 for k = 1:length(P_sweep)
     P = P_sweep(k);
     
-    % 1. Electrical & Thermal Physics
+    % --- Physics Calculation ---
     dT = P * R_thermal;           
     neff_DUT = neff + (d_neff_th * dT);
-    
-    % 2. Simulate heated DUT
     P_DUT = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_DUT, gamma);
     
-    % 3. Update all 4 permutations simultaneously
-    for i = 1:4
-        % Extract the correct column (1 for Thru, 2 for Drop)
-        gold_sig = P_gold(:, port_map(i, 1));
-        dut_sig  = P_DUT(:, port_map(i, 2));
-        
-        % Compute Product and Integral
-        prod_sig = gold_sig .* dut_sig;
-        Total_Power(i, k) = trapz(f, prod_sig) * P_dens; 
-        
-        % Update Spectral Plot lines
-        h_DUT{i}.YData = dut_sig;
-        h_prod{i}.YData = prod_sig;
-        
-        % Update title to show current temperature shift (only on top row)
-        title(ax_spectra(i), sprintf('%s\nHeat: %.2f mW | \\DeltaT: %.2f °C', titles{i}, P*1000, dT));
-        
-        % Update Power Tracking Plot lines
-        h_track{i}.XData = P_sweep(1:k) * 1000;
-        h_track{i}.YData = Total_Power(i, 1:k) * 1000;
-    end
+    % Split DUT into named variables
+    P_thru_DUT = P_DUT(:, 1);
+    P_drop_DUT = P_DUT(:, 2);
     
-    % 4. Draw frames and Pause
+    % ==========================================
+    % 1. Compute Through-Through (TT)
+    % ==========================================
+    prod_TT = P_thru_gold .* P_thru_DUT;
+    PSD_TT(:, k) = prod_TT * P_dens;
+    % PSD_TT(:, k) = prod_TT .* PSD_LED';
+    Power_TT(k) = trapz(f, PSD_TT(:, k));
+    
+    h_DUT_TT.YData  = P_thru_DUT;
+    h_prod_TT.YData = prod_TT;
+    h_track_TT.XData = P_sweep(1:k) * 1000;
+    h_track_TT.YData = Power_TT(1:k) * 1000;
+    title(ax_TT, sprintf('Through-Through\nHeat: %.2f mW | \\DeltaT: %.2f °C', P*1000, dT));
+
+    % ==========================================
+    % 2. Compute Drop-Drop (DD)
+    % ==========================================
+    prod_DD = P_drop_gold .* P_drop_DUT;
+    PSD_DD(:, k) = prod_DD * P_dens;
+    % PSD_DD(:, k) = prod_DD .* PSD_LED';
+    Power_DD(k) = trapz(f, PSD_DD(:, k));
+    
+    h_DUT_DD.YData  = P_drop_DUT;
+    h_prod_DD.YData = prod_DD;
+    h_track_DD.XData = P_sweep(1:k) * 1000;
+    h_track_DD.YData = Power_DD(1:k) * 1000;
+    title(ax_DD, sprintf('Drop-Drop\nHeat: %.2f mW | \\DeltaT: %.2f °C', P*1000, dT));
+
+    % ==========================================
+    % 3. Compute Drop-Through (DT)
+    % ==========================================
+    prod_DT = P_drop_gold .* P_thru_DUT;
+    PSD_DT(:, k) = prod_DT * P_dens;
+    % PSD_DT(:, k) = prod_DT .* PSD_LED';
+    Power_DT(k) = trapz(f, PSD_DT(:, k));
+    
+    h_DUT_DT.YData  = P_thru_DUT;
+    h_prod_DT.YData = prod_DT;
+    h_track_DT.XData = P_sweep(1:k) * 1000;
+    h_track_DT.YData = Power_DT(1:k) * 1000;
+    title(ax_DT, sprintf('Drop-Through\nHeat: %.2f mW | \\DeltaT: %.2f °C', P*1000, dT));
+
+    % ==========================================
+    % 4. Compute Through-Drop (TD)
+    % ==========================================
+    prod_TD = P_thru_gold .* P_drop_DUT;
+    PSD_TD(:, k) = prod_TD * P_dens;
+    % PSD_TD(:, k) = prod_TD .* PSD_LED';
+    Power_TD(k) = trapz(f, PSD_TD(:, k));
+    
+    h_DUT_TD.YData  = P_drop_DUT;
+    h_prod_TD.YData = prod_TD;
+    h_track_TD.XData = P_sweep(1:k) * 1000;
+    h_track_TD.YData = Power_TD(1:k) * 1000;
+    title(ax_TD, sprintf('Through-Drop\nHeat: %.2f mW | \\DeltaT: %.2f °C', P*1000, dT));
+
+    % --- Update Animation ---
     drawnow;
 end
 
