@@ -12,7 +12,7 @@ FSR_gold = 100e9;             % Free Spectral Range [Hz] (100 GHz)
 B_gold = 10e9;                % Full Width at Half Maximum [Hz] (10 GHz)
 ng = 4.2;                     % Group index (typical for Silicon on Insulator)
 neff = 2.45;                  % Effective refractive index (typical for 450nm guide)
-gamma = 0.99;                 % Round-trip amplitude transmission (1 = lossless)
+gamma = 1;                    % Round-trip amplitude transmission (1 = lossless)
 Ptot = 1e-3;                  % Total optical input power [1 mW]
 
 % Heating parameters
@@ -27,7 +27,7 @@ fprintf('--- Ring Parameters ---\n');
 fprintf('FSR_real:     %.3f GHz\n', FSR_real/1e9);
 fprintf('Real Radius:  %.3f um\n\n', R_real*1e6);
 
-fspan = 3 * FSR_gold;
+fspan = 5 * FSR_gold;
 
 % Define frequency range for simulation
 f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
@@ -35,29 +35,29 @@ f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
 P_gold = ring_simulate(f, f_0_gold, R_real, B_gold, ng, neff, gamma); % [P_thru, P_drop]
 
 
-% %% --- Define the "LED" Source Profile ---
-% 
-% % Source standard deviation (sigma) as function of gold FSR
-% sigma_LED = 2 * FSR_gold; 
-% 
-% % Create the unnormalized Gaussian shape centered at f_0_gold
-% PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
-% 
-% % Normalize it so the total area under the LED curve equals Ptot (1 mW)
-% % Integrate the shape using trapz to find its current arbitrary area,
-% % then divide by that area and multiply by our desired total power.
-% normalization_factor = Ptot / trapz(f, PSD_LED_shape);
-% PSD_LED = PSD_LED_shape * normalization_factor;
-% 
-% % Optional: Plot the LED spectrum just to verify it looks correct
-% figure('Name', 'LED Input Spectrum', 'Color', 'w');
-% plot(f / 1e12, PSD_LED, 'k', 'LineWidth', 2);
-% title('Tapered LED Input Power Spectral Density');
-% xlabel('Frequency (THz)'); ylabel('Power Density (W/Hz)'); grid on;
+%% --- Define the "LED" Source Profile ---
+
+% Source standard deviation (sigma) as function of gold FSR
+sigma_LED = 0.5 * FSR_gold; 
+
+% Create the unnormalized Gaussian shape centered at f_0_gold
+PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
+
+% Normalize it so the total area under the LED curve equals Ptot (1 mW)
+% Integrate the shape using trapz to find its current arbitrary area,
+% then divide by that area and multiply by our desired total power.
+normalization_factor = Ptot / trapz(f, PSD_LED_shape);
+PSD_LED = PSD_LED_shape * normalization_factor;
+
+% Plot the LED spectrum just to verify it looks correct
+figure('Name', 'LED Input Spectrum', 'Color', 'w');
+plot(f / 1e12, PSD_LED, 'k', 'LineWidth', 2);
+title('Tapered LED Input Power Spectral Density');
+xlabel('Frequency (THz)'); ylabel('Power Density (W/Hz)'); grid on;
 
 
 %% 4. Define the DUT and Setup Full Dashboard
-R_error = 1000e-9;            % Lithography error on ring radius (10 nm)
+R_error = 1000e-9;            % Lithography error on ring radius
 R_DUT = R_real + R_error;   % Physical radius of the DUT
 
 % Power sweep vector: 0 to 30 mW in 100 steps
@@ -141,7 +141,7 @@ for k = 1:length(P_sweep)
     % --- Physics Calculation ---
     dT = P * R_thermal;           
     neff_DUT = neff + (d_neff_th * dT);
-    P_DUT = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_DUT, gamma);
+    P_DUT = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_DUT, 0.9);
     
     % Split DUT into named variables
     P_thru_DUT = P_DUT(:, 1);
@@ -151,8 +151,8 @@ for k = 1:length(P_sweep)
     % 1. Compute Through-Through (TT)
     % ==========================================
     prod_TT = P_thru_gold .* P_thru_DUT;
-    PSD_TT(:, k) = prod_TT * P_dens;
-    % PSD_TT(:, k) = prod_TT .* PSD_LED';
+    % PSD_TT(:, k) = prod_TT * P_dens;
+     PSD_TT(:, k) = prod_TT .* PSD_LED';
     Power_TT(k) = trapz(f, PSD_TT(:, k));
     
     h_DUT_TT.YData  = P_thru_DUT;
@@ -165,8 +165,8 @@ for k = 1:length(P_sweep)
     % 2. Compute Drop-Drop (DD)
     % ==========================================
     prod_DD = P_drop_gold .* P_drop_DUT;
-    PSD_DD(:, k) = prod_DD * P_dens;
-    % PSD_DD(:, k) = prod_DD .* PSD_LED';
+    % PSD_DD(:, k) = prod_DD * P_dens;
+     PSD_DD(:, k) = prod_DD .* PSD_LED';
     Power_DD(k) = trapz(f, PSD_DD(:, k));
     
     h_DUT_DD.YData  = P_drop_DUT;
@@ -179,8 +179,8 @@ for k = 1:length(P_sweep)
     % 3. Compute Drop-Through (DT)
     % ==========================================
     prod_DT = P_drop_gold .* P_thru_DUT;
-    PSD_DT(:, k) = prod_DT * P_dens;
-    % PSD_DT(:, k) = prod_DT .* PSD_LED';
+    % PSD_DT(:, k) = prod_DT * P_dens;
+     PSD_DT(:, k) = prod_DT .* PSD_LED';
     Power_DT(k) = trapz(f, PSD_DT(:, k));
     
     h_DUT_DT.YData  = P_thru_DUT;
@@ -193,8 +193,8 @@ for k = 1:length(P_sweep)
     % 4. Compute Through-Drop (TD)
     % ==========================================
     prod_TD = P_thru_gold .* P_drop_DUT;
-    PSD_TD(:, k) = prod_TD * P_dens;
-    % PSD_TD(:, k) = prod_TD .* PSD_LED';
+    %PSD_TD(:, k) = prod_TD * P_dens;
+     PSD_TD(:, k) = prod_TD .* PSD_LED';
     Power_TD(k) = trapz(f, PSD_TD(:, k));
     
     h_DUT_TD.YData  = P_drop_DUT;
