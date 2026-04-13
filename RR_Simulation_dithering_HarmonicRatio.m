@@ -10,31 +10,32 @@ enable_animation = true;
 lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold; 
 FSR_gold = 100e9;             B_gold = 10e9;                
 ng = 4.2;                     neff = 2.45;                  
-gamma = 1;                    Ptot = 1e-3;                  
+gamma = 1;                    Ptot = 1e-3;
+alpha_db_cm = 2;
 
 % Heating parameters
 d_neff_th = 1.86e-4;          R_heater = 100;               
 R_thermal = 1e3;              
 
 %% 2. Design the RR
-[FSR_real, R_real] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
+[FSR_real, R_real, K1, K2] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
 fspan = 5 * FSR_gold;
-f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
-P_gold = ring_simulate(f, f_0_gold, R_real, B_gold, ng, neff, gamma);
+f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 1000);
+P_gold = ring_simulate_K(f, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
 
 %% 3. Define the "LED" Source Profile 
-sigma_LED = 0.5 * FSR_gold; 
+sigma_LED = 2 * FSR_gold; 
 PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
 normalization_factor = Ptot / trapz(f, PSD_LED_shape);
 PSD_LED = PSD_LED_shape * normalization_factor;
 
 %% 4. Define the DUT and Setup Dashboards
-R_error = 1e-6;          
+R_error = 10e-9;          
 R_DUT = R_real + R_error;   
 P_sweep = linspace(0, 30e-3, 400); 
 
 % --- Setup Dither Parameters ---
-A_dither = 0.1e-3;             
+A_dither = 1e-3;             % dither amplitude has major role
 n_cycles = 3;                  
 N_time = 180;                   
 phi_t = linspace(0, n_cycles * 2 * pi, N_time);
@@ -92,10 +93,10 @@ subplot(2, 4, 4); hold on; for i=1:3, h_harm_TD(i) = plot(NaN, NaN, colors{i}, '
 
 % Row 2: Ratios
 ratio_limit = [-0.1 1.5]; 
-subplot(2, 4, 5); h_ratio_TT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TT'); xlabel('Heater (mW)'); ylabel('Ratio'); grid on; xlim([0 max(P_sweep)*1000]); ylim(ratio_limit);
-subplot(2, 4, 6); h_ratio_DD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); ylim(ratio_limit);
-subplot(2, 4, 7); h_ratio_DT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DT'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); ylim(ratio_limit);
-subplot(2, 4, 8); h_ratio_TD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); ylim(ratio_limit);
+subplot(2, 4, 5); h_ratio_TT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TT'); xlabel('Heater (mW)'); ylabel('Ratio'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(2, 4, 6); h_ratio_DD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(2, 4, 7); h_ratio_DT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DT'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(2, 4, 8); h_ratio_TD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
 
 
 %% 5. Thermo-Optic Tuning Loop
@@ -106,7 +107,7 @@ for k = 1:length(P_sweep)
     
     dT_base = P_base * R_thermal;           
     neff_base = neff + (d_neff_th * dT_base);
-    P_DUT_base = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_base, gamma);
+    P_DUT_base = ring_simulate_K(f, f_0_gold, R_DUT, K1-0.2*K1, K2+0.2*K2, ng, neff_base, alpha_db_cm);
     
     P_thru_DUT = P_DUT_base(:, 1);
     P_drop_DUT = P_DUT_base(:, 2);
@@ -125,7 +126,7 @@ for k = 1:length(P_sweep)
         P_inst = P_base + A_dither * sin_1f(t_idx);
         dT_inst = P_inst * R_thermal;
         neff_inst = neff + (d_neff_th * dT_inst);
-        P_DUT_inst = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_inst, gamma);
+        P_DUT_inst = ring_simulate_K(f, f_0_gold, R_DUT, K1-0.2*K1, K2+0.2*K2, ng, neff_inst, alpha_db_cm);
         
         P_out_TT_t(t_idx) = trapz(f, (P_thru_gold .* P_DUT_inst(:, 1)) .* PSD_LED');
         P_out_DD_t(t_idx) = trapz(f, (P_drop_gold .* P_DUT_inst(:, 2)) .* PSD_LED');
