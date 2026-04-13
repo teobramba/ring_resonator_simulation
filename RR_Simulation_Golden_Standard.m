@@ -38,7 +38,7 @@ fprintf('Required Transmission (r): %.4f\n', r);
 fprintf('Required Coupling (t): %.4f\n\n', t);
 
 %% 3. Frequency Vector Setup
-f_span = 6 * FSR_gold;
+f_span = 2 * FSR_gold;
 f = linspace(f_0_gold - f_span/2, f_0_gold + f_span/2, 10000); 
 phi_gold = 2 * pi * (f - f_0_gold) / FSR_gold;
 
@@ -106,28 +106,28 @@ figure();
 % --- Plot 1: Through-Through ---
 subplot(2,2,1);
 plot(f/1e12, P_thru_gold, 'b--', f/1e12, P_thru_DUT, 'r--', f/1e12, P_TT, 'k', 'LineWidth', 1.5);
-title(['Through-Through']);
+title(['Through-Through'], 'FontSize', 14);
 ylabel('Transmission'); grid on;
 legend('Gold', 'DUT', 'Product');
 
 % --- Plot 2: Drop-Drop ---
 subplot(2,2,2);
 plot(f/1e12, P_drop_gold, 'b--', f/1e12, P_drop_DUT, 'r--', f/1e12, P_DD, 'k', 'LineWidth', 1.5);
-title(['Drop-Drop']);
+title(['Drop-Drop'], 'FontSize', 14);
 grid on;
 legend('Gold', 'DUT', 'Product');
 
 % --- Plot 3: Drop-Through ---
 subplot(2,2,3);
 plot(f/1e12, P_drop_gold, 'b--', f/1e12, P_thru_DUT, 'r--', f/1e12, P_DT, 'k', 'LineWidth', 1.5);
-title(['Drop Gold + Thru DUT']);
+title(['Drop Gold + Through DUT'], 'FontSize', 14);
 xlabel('Frequency (THz)'); ylabel('Transmission'); grid on;
 legend('Gold Drop', 'DUT Thru', 'Product');
 
 % --- Plot 4: Through-Drop ---
 subplot(2,2,4);
 plot(f/1e12, P_thru_gold, 'b--', f/1e12, P_drop_DUT, 'r--', f/1e12, P_TD, 'k', 'LineWidth', 1.5);
-title(['Thru Gold + Drop DUT']);
+title(['Through Gold + Drop DUT'], 'FontSize', 14);
 xlabel('Frequency (THz)'); grid on;
 legend('Gold Thru', 'DUT Drop', 'Product');
 

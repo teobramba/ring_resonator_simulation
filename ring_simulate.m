@@ -21,7 +21,7 @@ function TF = ring_simulate(f, f_ref, R, B, ng, neff, gamma)
     
     % 2. Calculate coupling coefficients required to hit the target Bandwidth
     p = pi * B / FSR;
-    r = (-p + sqrt(p^2 + 4)) / 2;
+    r = (-p + sqrt(p^2 + 4)) / 2;   % field coupling coefficient
     t = sqrt(1 - r^2);
     
     % 3. Calculate Absolute Round-Trip Phase

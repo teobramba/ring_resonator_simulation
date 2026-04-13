@@ -12,7 +12,7 @@ FSR_gold = 100e9;             % Free Spectral Range [Hz] (100 GHz)
 B_gold = 10e9;                % Full Width at Half Maximum [Hz] (10 GHz)
 ng = 4.2;                     % Group index (typical for Silicon on Insulator)
 neff = 2.45;                  % Effective refractive index (typical for 450nm guide)
-gamma = 1;                    % Round-trip amplitude transmission (1 = lossless)
+alpha_db_cm = 2;
 Ptot = 1e-3;                  % Total optical input power [1 mW]
 
 % Heating parameters
@@ -22,23 +22,40 @@ R_thermal = 1e3;              % Thermal resistance, [1K/mW]
 
 
 %% 2. Design the RR
-[FSR_real, R_real] = ring_design(lambda_0_gold, FSR_gold, ng, neff);
+[FSR_real, R_real, K1, K2] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
 fprintf('--- Ring Parameters ---\n');
 fprintf('FSR_real:     %.3f GHz\n', FSR_real/1e9);
 fprintf('Real Radius:  %.3f um\n\n', R_real*1e6);
 
-fspan = 5 * FSR_gold;
+fspan = 4 * FSR_gold;
 
 % Define frequency range for simulation
 f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
 
-P_gold = ring_simulate(f, f_0_gold, R_real, B_gold, ng, neff, gamma); % [P_thru, P_drop]
+P_gold = ring_simulate_K(f, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm); % [P_thru, P_drop]
+
+% % plot the Through and drop ports
+% figure('Name', "Through and Drop ports")
+% subplot(2, 1, 1);
+% plot(f./1e12, P_gold(:, 1), 'LineWidth', 2);
+% title("Through Port", "FontSize", 16);
+% axis tight;
+% xlabel("Freqency [THz]");
+% ylabel("Power [mW]");
+% ylim([-0.1, 1.1]);
+% subplot(2, 1, 2);
+% plot(f./1e12, P_gold(:, 2), 'LineWidth', 2);
+% title("Drop Port", "FontSize", 16);
+% axis tight;
+% xlabel("Freqency [THz]");
+% ylabel("Power [mW]");
+% ylim([-0.1, 1.1]);
 
 
 %% --- Define the "LED" Source Profile ---
 
 % Source standard deviation (sigma) as function of gold FSR
-sigma_LED = 0.5 * FSR_gold; 
+sigma_LED = 2 * FSR_gold; 
 
 % Create the unnormalized Gaussian shape centered at f_0_gold
 PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
@@ -59,6 +76,7 @@ xlabel('Frequency (THz)'); ylabel('Power Density (W/Hz)'); grid on;
 %% 4. Define the DUT and Setup Full Dashboard
 R_error = 1000e-9;            % Lithography error on ring radius
 R_DUT = R_real + R_error;   % Physical radius of the DUT
+gamma_DUT = 1;
 
 % Power sweep vector: 0 to 30 mW in 100 steps
 P_sweep = linspace(0, 30e-3, 100); 
@@ -83,53 +101,57 @@ P_drop_gold = P_gold(:, 2);
 % --- Combined Figure Setup ---
 figure('Name', 'Full Port Permutation Dashboard', 'Color', 'w', 'Position', [50, 50, 1400, 700]);
 
+font_title = 15;
+font_title2 = 17;
+font_label = 14;
+
 % 1. Setup Through-Through (Column 1)
 ax_TT = subplot(2, 4, 1);
 plot(f / 1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on;
 h_DUT_TT  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
 h_prod_TT = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
-title('Through-Through'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+title('Through-Through', 'FontSize', font_title); xlabel('Frequency (THz)', 'FontSize', font_label); ylabel('Transmission', 'FontSize', font_label); grid on; ylim([0 1.1]);
 legend('Gold Thru', 'DUT Thru', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
 
 subplot(2, 4, 5);
 h_track_TT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
-title('Power Tracking: TT'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+title('Power Tracking: TT', 'FontSize', font_title2); xlabel('Heater Power (mW)', 'FontSize', font_label); ylabel('Output Power (mW)', 'FontSize', font_label); grid on; xlim([0 max(P_sweep)*1000]);
 
 % 2. Setup Drop-Drop (Column 2)
 ax_DD = subplot(2, 4, 2);
 plot(f / 1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on;
 h_DUT_DD  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
 h_prod_DD = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
-title('Drop-Drop'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+title('Drop-Drop', 'FontSize', font_title); xlabel('Frequency (THz)', 'FontSize', font_label); ylabel('Transmission', 'FontSize', font_label); grid on; ylim([0 1.1]);
 legend('Gold Drop', 'DUT Drop', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
 
 subplot(2, 4, 6);
 h_track_DD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
-title('Power Tracking: DD'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+title('Power Tracking: DD', 'FontSize', font_title2); xlabel('Heater Power (mW)', 'FontSize', font_label); ylabel('Output Power (mW)', 'FontSize', font_label); grid on; xlim([0 max(P_sweep)*1000]);
 
 % 3. Setup Drop-Through (Column 3)
 ax_DT = subplot(2, 4, 3);
 plot(f / 1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on;
 h_DUT_DT  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
 h_prod_DT = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
-title('Drop-Through'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+title('Drop-Through', 'FontSize', font_title); xlabel('Frequency (THz)', 'FontSize', font_label); ylabel('Transmission', 'FontSize', font_label); grid on; ylim([0 1.1]);
 legend('Gold Drop', 'DUT Thru', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
 
 subplot(2, 4, 7);
 h_track_DT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
-title('Power Tracking: DT'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+title('Power Tracking: DT', 'FontSize', font_title2); xlabel('Heater Power (mW)', 'FontSize', font_label); ylabel('Output Power (mW)', 'FontSize', font_label); grid on; xlim([0 max(P_sweep)*1000]);
 
 % 4. Setup Through-Drop (Column 4)
 ax_TD = subplot(2, 4, 4);
 plot(f / 1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on;
 h_DUT_TD  = plot(f / 1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5);
 h_prod_TD = plot(f / 1e12, NaN(size(f)), 'k', 'LineWidth', 2);
-title('Through-Drop'); xlabel('Frequency (THz)'); ylabel('Transmission'); grid on; ylim([0 1.1]);
+title('Through-Drop', 'FontSize', font_title); xlabel('Frequency (THz)', 'FontSize', font_label); ylabel('Transmission', 'FontSize', font_label); grid on; ylim([0 1.1]);
 legend('Gold Thru', 'DUT Drop', 'Product', 'Location', 'southoutside', 'Orientation', 'horizontal');
 
 subplot(2, 4, 8);
 h_track_TD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r', 'MarkerSize', 4);
-title('Power Tracking: TD'); xlabel('Heater Power (mW)'); ylabel('Output Power (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+title('Power Tracking: TD', 'FontSize', font_title2); xlabel('Heater Power (mW)', 'FontSize', font_label); ylabel('Output Power (mW)', 'FontSize', font_label); grid on; xlim([0 max(P_sweep)*1000]);
 
 %% 5. Thermo-Optic Tuning Loop
 fprintf('--- Starting Full Tuning Sweep ---\n');
@@ -141,7 +163,7 @@ for k = 1:length(P_sweep)
     % --- Physics Calculation ---
     dT = P * R_thermal;           
     neff_DUT = neff + (d_neff_th * dT);
-    P_DUT = ring_simulate(f, f_0_gold, R_DUT, B_gold, ng, neff_DUT, 0.9);
+    P_DUT =  ring_simulate_K(f, f_0_gold, R_DUT, K1, K2, ng, neff_DUT, alpha_db_cm);
     
     % Split DUT into named variables
     P_thru_DUT = P_DUT(:, 1);

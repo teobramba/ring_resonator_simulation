@@ -1,16 +1,19 @@
-function [FSR_real, R_real] = ring_design(lambda_0, FSR_target, ng, neff)
-    % RING_DESIGN Calculates the exact physical geometry of a ring resonator
+function [FSR_real, R_real, K1, K2] = ring_design(lambda_0, FSR_target, ng, neff, B)
+    % RING_DESIGN Calculates the exact physical geometry and coupling 
+    % parameters of a symmetric add-drop ring resonator.
     %
     % Inputs:
     % lambda_0   : Target center wavelength [m]
     % FSR_target : Desired Free Spectral Range [Hz]
     % ng         : Group refractive index
     % neff       : Effective refractive index (nominal, unheated)
+    % B          : Desired bandwidth (FWHM) [Hz]
     %
     % Outputs:
     % FSR_real   : The actual FSR after adjusting to physical constraints [Hz]
     % R_real     : The physical radius of the ring [m]
-    % m          : The integer mode number at the center wavelength
+    % K1         : Power coupling coefficient of the input coupler
+    % K2         : Power coupling coefficient of the output coupler
 
     c = 299792458; % Speed of light [m/s]
     
@@ -27,4 +30,21 @@ function [FSR_real, R_real] = ring_design(lambda_0, FSR_target, ng, neff)
     
     % 4. Calculate the true FSR based on the physical length
     FSR_real = c / (ng * L_real);
+    
+    % 5. Calculate Power Coupling Coefficients (K1, K2)
+    % We assume a symmetric add-drop configuration (K1 = K2) and 
+    % negligible internal round-trip loss for the bandwidth targeting.
+    
+    p = pi * B / FSR_real; % Dimensionless bandwidth parameter
+    
+    % Solve quadratic equation for field transmission coefficient (t)
+    t = (-p + sqrt(p^2 + 4)) / 2;
+    
+    % Convert field transmission (t) to power coupling (K)
+    K = 1 - t^2;
+    
+    % Assign to symmetric couplers
+    K1 = K;
+    K2 = K;
+    
 end
