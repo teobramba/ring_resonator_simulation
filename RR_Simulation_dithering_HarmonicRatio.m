@@ -35,7 +35,7 @@ R_DUT = R_real + R_error;
 P_sweep = linspace(0, 30e-3, 400); 
 
 % --- Setup Dither Parameters ---
-A_dither = 1e-3;             % dither amplitude has major role
+A_dither = 0.5e-3;             % dither amplitude has major role
 n_cycles = 3;                  
 N_time = 180;                   
 phi_t = linspace(0, n_cycles * 2 * pi, N_time);
@@ -54,9 +54,30 @@ ylim([-0.13, 0.13]);
 grid on
 title('Dither Signal (sine)', 'FontSize', 16);
 
-%%
+%% DUT Coupling coefficient dependance on Gap
+evan_gamma = 0.02;                  % evanescent decay constant gamma for SOI [nm^-1]
+gap1 = 5;                          % gap distance error for coupler 1 [nm]
+gap2 = 5;                          % gap distance error for coupler 2 [nm]
+K1_DUT = K1*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
+K2_DUT = K2*exp(-evan_gamma*gap2);   % DUT coupling coefficient 1
 
-% --- Pre-allocate Arrays ---
+
+% %% Plot coupling dependance on gap distance
+% gap = linspace(0, 30, 100);
+% K1_plot = K1 * exp(-evan_gamma * gap);   % DUT coupling coefficient for varying gap
+% K2_plot = K2 * exp(evan_gamma * gap);   % DUT coupling coefficient for varying gap
+% figure;
+% plot(gap, K1_plot, "LineWidth", 2, "Color", 'r');   hold on;
+% plot(gap, K2_plot, "LineWidth", 2, "Color", 'b');
+% xlabel('Gap distance (nm)', 'FontSize', 14);
+% ylabel('Power Coupling Coefficient', 'FontSize', 14);
+% 
+% legend({'K1', 'K2'}, 'Location', 'northwest', 'FontSize', 14);
+% % ylim([-0.13, 0.13]);
+% grid on
+% title('Power Coupling coefficient dependance on gap distance', 'FontSize', 16);
+
+%% --- Pre-allocate Arrays ---
 Power_TT = zeros(1, length(P_sweep)); Power_DD = zeros(1, length(P_sweep));
 Power_DT = zeros(1, length(P_sweep)); Power_TD = zeros(1, length(P_sweep));
 H_TT = zeros(3, length(P_sweep));     H_DD = zeros(3, length(P_sweep));
@@ -68,35 +89,33 @@ colors = {'b', 'r', 'g'};
 harmonic_names = {'1f', '2f', '3f'};
 
 % =========================================================================
-% FIGURE 1: SPECTRA AND POWER TRACKING
+% FIGURE 1: SPECTRA POWER TRACKING AND HARMONIC
 % =========================================================================
-figure('Name', 'Spectra & Power Dashboard', 'Color', 'w', 'Position', [50, 450, 1600, 500]);
-ax_TT = subplot(2, 4, 1); plot(f/1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_TT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Through'); grid on; ylim([0 1.1]); ylabel('Transmission');
-ax_DD = subplot(2, 4, 2); plot(f/1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_DD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Drop'); grid on; ylim([0 1.1]);
-ax_DT = subplot(2, 4, 3); plot(f/1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_DT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Through'); grid on; ylim([0 1.1]);
-ax_TD = subplot(2, 4, 4); plot(f/1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_TD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Drop'); grid on; ylim([0 1.1]);
+fig_dashboard = figure('Name', 'Spectra, Power Dashboard and Harmonic analisys', 'Color', 'w', 'Position', [0, 20, 1920, 1000]);
+% Row 1: Spectrums
+ax_TT = subplot(4, 4, 1); plot(f/1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_TT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Through'); grid on; ylim([0 1.1]); ylabel('Transmission');
+ax_DD = subplot(4, 4, 2); plot(f/1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_DD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Drop'); grid on; ylim([0 1.1]);
+ax_DT = subplot(4, 4, 3); plot(f/1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_DT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Through'); grid on; ylim([0 1.1]);
+ax_TD = subplot(4, 4, 4); plot(f/1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_TD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Drop'); grid on; ylim([0 1.1]);
 
-subplot(2, 4, 5); h_track_TT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: TT'); xlabel('Heater (mW)'); ylabel('Output (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
-subplot(2, 4, 6); h_track_DD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: DD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
-subplot(2, 4, 7); h_track_DT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: DT'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
-subplot(2, 4, 8); h_track_TD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: TD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+% Row 2: Power Tracking
+subplot(4, 4, 5); h_track_TT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: TT'); xlabel('Heater (mW)'); ylabel('Output (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+subplot(4, 4, 6); h_track_DD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: DD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+subplot(4, 4, 7); h_track_DT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: DT'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
+subplot(4, 4, 8); h_track_TD = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: TD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
 
-% =========================================================================
-% FIGURE 2: HARMONICS AND RATIOS (2x4 Grid)
-% =========================================================================
-figure('Name', 'Harmonic Ratio Analysis', 'Color', 'w', 'Position', [50, 50, 1600, 500]);
-% Row 1: Harmonics
-subplot(2, 4, 1); hold on; for i=1:3, h_harm_TT(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: TT'); ylabel('Amp (mW)'); grid on; xlim([0 max(P_sweep)*1000]); legend(harmonic_names, 'Location', 'northwest');
-subplot(2, 4, 2); hold on; for i=1:3, h_harm_DD(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: DD'); grid on; xlim([0 max(P_sweep)*1000]);
-subplot(2, 4, 3); hold on; for i=1:3, h_harm_DT(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: DT'); grid on; xlim([0 max(P_sweep)*1000]);
-subplot(2, 4, 4); hold on; for i=1:3, h_harm_TD(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: TD'); grid on; xlim([0 max(P_sweep)*1000]);
+% Row 3: Harmonics
+subplot(4, 4, 9); hold on; for i=1:3, h_harm_TT(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: TT'); ylabel('Amp (mW)'); grid on; xlim([0 max(P_sweep)*1000]); legend(harmonic_names, 'Location', 'northwest');
+subplot(4, 4, 10); hold on; for i=1:3, h_harm_DD(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: DD'); grid on; xlim([0 max(P_sweep)*1000]);
+subplot(4, 4, 11); hold on; for i=1:3, h_harm_DT(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: DT'); grid on; xlim([0 max(P_sweep)*1000]);
+subplot(4, 4, 12); hold on; for i=1:3, h_harm_TD(i) = plot(NaN, NaN, colors{i}, 'LineWidth', 1.5); end; title('Harmonics: TD'); grid on; xlim([0 max(P_sweep)*1000]);
 
-% Row 2: Ratios
+% Row 4: Ratios
 ratio_limit = [-0.1 1.5]; 
-subplot(2, 4, 5); h_ratio_TT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TT'); xlabel('Heater (mW)'); ylabel('Ratio'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
-subplot(2, 4, 6); h_ratio_DD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
-subplot(2, 4, 7); h_ratio_DT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DT'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
-subplot(2, 4, 8); h_ratio_TD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(4, 4, 13); h_ratio_TT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TT'); xlabel('Heater (mW)'); ylabel('Ratio'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(4, 4, 14); h_ratio_DD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(4, 4, 15); h_ratio_DT = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: DT'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
+subplot(4, 4, 16); h_ratio_TD = plot(NaN, NaN, 'k', 'LineWidth', 1.5); title('Ratio 2f/1f: TD'); xlabel('Heater (mW)'); grid on; xlim([0 max(P_sweep)*1000]); % ylim(ratio_limit);
 
 
 %% 5. Thermo-Optic Tuning Loop
@@ -107,7 +126,7 @@ for k = 1:length(P_sweep)
     
     dT_base = P_base * R_thermal;           
     neff_base = neff + (d_neff_th * dT_base);
-    P_DUT_base = ring_simulate_K(f, f_0_gold, R_DUT, K1-0.2*K1, K2+0.2*K2, ng, neff_base, alpha_db_cm);
+    P_DUT_base = ring_simulate_K(f, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff_base, alpha_db_cm);
     
     P_thru_DUT = P_DUT_base(:, 1);
     P_drop_DUT = P_DUT_base(:, 2);
@@ -126,7 +145,7 @@ for k = 1:length(P_sweep)
         P_inst = P_base + A_dither * sin_1f(t_idx);
         dT_inst = P_inst * R_thermal;
         neff_inst = neff + (d_neff_th * dT_inst);
-        P_DUT_inst = ring_simulate_K(f, f_0_gold, R_DUT, K1-0.2*K1, K2+0.2*K2, ng, neff_inst, alpha_db_cm);
+        P_DUT_inst = ring_simulate_K(f, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff_inst, alpha_db_cm);
         
         P_out_TT_t(t_idx) = trapz(f, (P_thru_gold .* P_DUT_inst(:, 1)) .* PSD_LED');
         P_out_DD_t(t_idx) = trapz(f, (P_drop_gold .* P_DUT_inst(:, 2)) .* PSD_LED');
@@ -225,3 +244,43 @@ if ~enable_animation
     drawnow; 
     fprintf('Graphs rendered.\n');
 end
+
+%% 6.5 Add Footer Text to Figure
+% Construct the string with all simulation parameters
+footer_str = sprintf(['\\lambda_0: %.0f nm, FSR: %.1f GHz, B: %.1f GHz, ' ...
+    '\\alpha: %.1f dB/cm, R_{err}: %.1f nm, A_{dith}: %.2f mW, ' ...
+    '\\sigma_{LED}: %.1f GHz, \\gamma_{evan}: %.3f nm^{-1}, gap1: %.1f nm, gap2: %.1f nm'], ...
+    lambda_0_gold*1e9, ...           % lambda_0 in nm
+    FSR_gold/1e9, ...                % FSR in GHz
+    B_gold/1e9, ...                  % B in GHz
+    alpha_db_cm, ...                 % Loss
+    R_error*1e9, ...                 % Radius error in nm
+    A_dither*1000, ...               % Dither in mW
+    sigma_LED/1e9, ...               % LED Sigma in GHz
+    evan_gamma, ...                  % Evanescent gamma
+    gap1, ...                        % Gap 1 error
+    gap2);                           % Gap 2 error
+
+% Add the annotation to the bottom of the figure
+annotation(fig_dashboard, 'textbox', [0, 0.005, 1, 0.045], ...
+    'String', footer_str, ...
+    'Interpreter', 'tex', ...        % Forces Greek symbol rendering
+    'EdgeColor', 'none', ...
+    'BackgroundColor', 'w', ...      % White background blocks overlapping axes
+    'HorizontalAlignment', 'center', ...
+    'VerticalAlignment', 'middle', ...
+    'FontSize', 12, ...              % Made slightly larger for 1920px width
+    'FontWeight', 'bold', ...
+    'Color', [0.2 0.2 0.2]);
+
+%% 7. Export Dashboard Image
+fprintf('Saving final dashboard image...\n');
+
+% Define the file name (it will save in whatever folder you are currently running the script from)
+image_filename = 'Full Dashboard (1550nm, FSR100G, B10G, alpha2, A_dith0.5m, sigma2FSR, 5nm).png';
+
+% Use exportgraphics to save the figure handle we defined earlier.
+% 'Resolution', 300 makes it high-definition (300 Dots Per Inch).
+exportgraphics(fig_dashboard, image_filename, 'Resolution', 300);
+
+fprintf('Image saved successfully as: %s\n', image_filename);
