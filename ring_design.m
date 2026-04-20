@@ -1,4 +1,4 @@
-function [FSR_real, R_real, K1, K2] = ring_design(lambda_0, FSR_target, ng, neff, B)
+function [FSR_real, R_real, K1, K2, alpha_crit_dB_cm] = ring_design(lambda_0, FSR_target, ng, neff, B)
     % RING_DESIGN Calculates the exact physical geometry and coupling 
     % parameters of a symmetric add-drop ring resonator.
     %
@@ -10,11 +10,13 @@ function [FSR_real, R_real, K1, K2] = ring_design(lambda_0, FSR_target, ng, neff
     % B          : Desired bandwidth (FWHM) [Hz]
     %
     % Outputs:
-    % FSR_real   : The actual FSR after adjusting to physical constraints [Hz]
-    % R_real     : The physical radius of the ring [m]
-    % K1         : Power coupling coefficient of the input coupler
-    % K2         : Power coupling coefficient of the output coupler
-
+    % FSR_real         : The actual FSR after adjusting to physical constraints [Hz]
+    % R_real           : The physical radius of the ring [m]
+    % K1               : Power coupling coefficient of the input coupler
+    % K2               : Power coupling coefficient of the output coupler
+    % alpha_crit_dB_cm : The ideal waveguide loss (dB/cm) required to critically 
+    %                    couple K1, assuming an All-Pass configuration.
+    
     c = 299792458; % Speed of light [m/s]
     
     % 1. Calculate approximate circumference based on target FSR
@@ -32,9 +34,6 @@ function [FSR_real, R_real, K1, K2] = ring_design(lambda_0, FSR_target, ng, neff
     FSR_real = c / (ng * L_real);
     
     % 5. Calculate Power Coupling Coefficients (K1, K2)
-    % We assume a symmetric add-drop configuration (K1 = K2) and 
-    % negligible internal round-trip loss for the bandwidth targeting.
-    
     p = pi * B / FSR_real; % Dimensionless bandwidth parameter
     
     % Solve quadratic equation for field transmission coefficient (t)
@@ -46,5 +45,11 @@ function [FSR_real, R_real, K1, K2] = ring_design(lambda_0, FSR_target, ng, neff
     % Assign to symmetric couplers
     K1 = K;
     K2 = K;
+    
+    % 6. Calculate Critical Coupling Attenuation (All-Pass Assumption, modulators only)
+    L_cm = L_real * 100;
+    
+    % Calculate required loss in dB/cm
+    alpha_crit_dB_cm = -20 * log10(t) / L_cm;
     
 end

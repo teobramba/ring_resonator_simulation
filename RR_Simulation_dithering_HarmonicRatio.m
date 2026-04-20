@@ -10,7 +10,7 @@ enable_animation = true;
 lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold; 
 FSR_gold = 100e9;             B_gold = 10e9;                
 ng = 4.2;                     neff = 2.45;                  
-gamma = 1;                    Ptot = 1e-3;
+Ptot = 1e-3;
 alpha_db_cm = 2;
 
 % Heating parameters
@@ -18,7 +18,7 @@ d_neff_th = 1.86e-4;          R_heater = 100;
 R_thermal = 1e3;              
 
 %% 2. Design the RR
-[FSR_real, R_real, K1, K2] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
+[FSR_real, R_real, K1, K2, alpha_crit] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
 fspan = 5 * FSR_gold;
 f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 1000);
 P_gold = ring_simulate_K(f, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
@@ -30,7 +30,7 @@ normalization_factor = Ptot / trapz(f, PSD_LED_shape);
 PSD_LED = PSD_LED_shape * normalization_factor;
 
 %% 4. Define the DUT and Setup Dashboards
-R_error = 10e-9;          
+R_error = 0e-9;          
 R_DUT = R_real + R_error;   
 P_sweep = linspace(0, 30e-3, 400); 
 
@@ -56,8 +56,8 @@ title('Dither Signal (sine)', 'FontSize', 16);
 
 %% DUT Coupling coefficient dependance on Gap
 evan_gamma = 0.02;                  % evanescent decay constant gamma for SOI [nm^-1]
-gap1 = 5;                          % gap distance error for coupler 1 [nm]
-gap2 = 5;                          % gap distance error for coupler 2 [nm]
+gap1 = 0;                          % gap distance error for coupler 1 [nm]
+gap2 = 0;                          % gap distance error for coupler 2 [nm]
 K1_DUT = K1*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
 K2_DUT = K2*exp(-evan_gamma*gap2);   % DUT coupling coefficient 1
 
@@ -277,7 +277,7 @@ annotation(fig_dashboard, 'textbox', [0, 0.005, 1, 0.045], ...
 fprintf('Saving final dashboard image...\n');
 
 % Define the file name (it will save in whatever folder you are currently running the script from)
-image_filename = 'Full Dashboard (1550nm, FSR100G, B10G, alpha2, A_dith0.5m, sigma2FSR, 5nm).png';
+image_filename = 'Full Dashboard (1550nm, FSR100G, B10G, alpha0, A_dith0.5m, sigma2FSR, 0nm, radius_err0nm).png';
 
 % Use exportgraphics to save the figure handle we defined earlier.
 % 'Resolution', 300 makes it high-definition (300 Dots Per Inch).
