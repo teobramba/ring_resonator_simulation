@@ -19,6 +19,7 @@ R_thermal = 1e3;
 
 %% 2. Design the RR
 [FSR_real, R_real, K1, K2, alpha_crit] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
+K1 = 0.291;
 fspan = 5 * FSR_gold;
 f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 1000);
 P_gold = ring_simulate_K(f, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
@@ -29,7 +30,7 @@ PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
 normalization_factor = Ptot / trapz(f, PSD_LED_shape);
 PSD_LED = PSD_LED_shape * normalization_factor;
 
-%% 4. Define the DUT and Setup Dashboards
+%% 4. Define the DUT Parameters
 R_error = 0e-9;          
 R_DUT = R_real + R_error;   
 P_sweep = linspace(0, 30e-3, 400); 
@@ -50,32 +51,62 @@ figure
 plot(phi_t, A_dither*1000*sin_1f, 'LineWidth', 2);
 xlabel('Phase (rad)', 'FontSize', 14);
 ylabel('Power (mW)', 'FontSize', 14);
-ylim([-0.13, 0.13]);
+ylim([-0.53, 0.53]);
 grid on
 title('Dither Signal (sine)', 'FontSize', 16);
 
 %% DUT Coupling coefficient dependance on Gap
 evan_gamma = 0.02;                  % evanescent decay constant gamma for SOI [nm^-1]
-gap1 = 0;                          % gap distance error for coupler 1 [nm]
-gap2 = 0;                          % gap distance error for coupler 2 [nm]
+gap1 = 10;                          % gap distance error for coupler 1 [nm], best -4nm
+gap2 = -10;                          % gap distance error for coupler 2 [nm]
 K1_DUT = K1*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
-K2_DUT = K2*exp(-evan_gamma*gap2);   % DUT coupling coefficient 1
+K2_DUT = K2*exp(-evan_gamma*gap2);   % DUT coupling coefficient 2
 
+%% Plot coupling dependance on gap distance
+gap = linspace(0, 30, 100);
+K1_plot = K1 * exp(-evan_gamma * gap);   % DUT coupling coefficient for varying gap
+K2_plot = K2 * exp(evan_gamma * gap);   % DUT coupling coefficient for varying gap
 
-% %% Plot coupling dependance on gap distance
-% gap = linspace(0, 30, 100);
-% K1_plot = K1 * exp(-evan_gamma * gap);   % DUT coupling coefficient for varying gap
-% K2_plot = K2 * exp(evan_gamma * gap);   % DUT coupling coefficient for varying gap
-% figure;
-% plot(gap, K1_plot, "LineWidth", 2, "Color", 'r');   hold on;
-% plot(gap, K2_plot, "LineWidth", 2, "Color", 'b');
-% xlabel('Gap distance (nm)', 'FontSize', 14);
-% ylabel('Power Coupling Coefficient', 'FontSize', 14);
-% 
-% legend({'K1', 'K2'}, 'Location', 'northwest', 'FontSize', 14);
-% % ylim([-0.13, 0.13]);
-% grid on
-% title('Power Coupling coefficient dependance on gap distance', 'FontSize', 16);
+figure;
+plot(gap, K1_plot, "LineWidth", 2, "Color", 'r');   hold on;
+plot(gap, K2_plot, "LineWidth", 2, "Color", 'b');
+xlabel('Gap distance (nm)', 'FontSize', 14);
+ylabel('Power Coupling Coefficient', 'FontSize', 14);
+
+legend({'K1', 'K2'}, 'Location', 'northwest', 'FontSize', 14);
+% ylim([-0.13, 0.13]);
+grid on
+title('Power Coupling coefficient dependance on gap distance', 'FontSize', 16);
+
+%% Comparison Gold-DUT Transfer functions
+fspan = FSR_gold;
+f_plot = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
+
+P_gold_plot = ring_simulate_K(f_plot, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
+P_DUT_plot = ring_simulate_K(f_plot, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff, alpha_db_cm);
+
+ER_gold = ext_ratio(P_gold_plot);
+ER_DUT = ext_ratio(P_DUT_plot);
+
+% Stamp the Extintion ratio values
+fprintf('--- Extinction Ratio ---\n');
+fprintf('Extinction Ratio - Gold:   %.2f dB\n', ER_gold);
+fprintf('Extinction Ratio - DUT:    %.2f dB\n', ER_DUT);
+
+figure;
+subplot(1, 2, 1);
+plot(f_plot/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on;
+plot(f_plot/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
+legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
+xlabel('Frequency [THz]', 'FontSize', 14);
+title('Gold Reference Transfer Function', 'FontSize', 15);
+
+subplot(1, 2, 2);
+plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on;
+plot(f_plot/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 2);
+legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
+xlabel('Frequency [THz]', 'FontSize', 14);
+title('DUT Transfer Function', 'FontSize', 15);
 
 %% --- Pre-allocate Arrays ---
 Power_TT = zeros(1, length(P_sweep)); Power_DD = zeros(1, length(P_sweep));
