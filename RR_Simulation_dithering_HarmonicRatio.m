@@ -19,16 +19,30 @@ R_thermal = 1e3;
 
 %% 2. Design the RR
 [FSR_real, R_real, K1, K2, alpha_crit] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
-K1 = 0.291;
+%K1 = 0.291;     % Tuned value for best coupling and maximum Extintion Ratio
 fspan = 5 * FSR_gold;
 f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 1000);
 P_gold = ring_simulate_K(f, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
 
 %% 3. Define the "LED" Source Profile 
-sigma_LED = 2 * FSR_gold; 
+sigma_LED = FSR_gold; 
 PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
 normalization_factor = Ptot / trapz(f, PSD_LED_shape);
 PSD_LED = PSD_LED_shape * normalization_factor;
+
+%% Plot LED Power Spectrum Density
+PSD_LED_fig = figure('Position', [20, 30, 700, 700]);
+plot(f/1e12, PSD_LED, 'LineWidth', 2);
+title('LED Power Spectrum Density Profile', 'FontSize', 18);
+xlabel('Frequency [THz]', 'FontSize', 16);
+ylabel('PSD [mW/Hz]', 'FontSize', 16);
+grid on;
+
+%% Export PSD graph
+% Define the file name
+PSD_filename = 'LED PSD.png';
+exportgraphics(PSD_LED_fig, PSD_filename , 'Resolution', 300);
+fprintf('Image saved successfully as: %s\n', PSD_filename);
 
 %% 4. Define the DUT Parameters
 R_error = 0e-9;          
@@ -93,16 +107,24 @@ fprintf('--- Extinction Ratio ---\n');
 fprintf('Extinction Ratio - Gold:   %.2f dB\n', ER_gold);
 fprintf('Extinction Ratio - DUT:    %.2f dB\n', ER_DUT);
 
+%% Extintion Ratio Explanation Plot
+figure;
+plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); grid on;
+title('DUT Through Port', 'FontSize', 15);
+legend({'Through'}, 'Location', 'southeast', 'FontSize', 14);
+xlabel('Frequency [THz]', 'FontSize', 14);
+
+%% Gold vs DUT plot
 figure;
 subplot(1, 2, 1);
-plot(f_plot/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on;
+plot(f_plot/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on
 plot(f_plot/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
 legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
 xlabel('Frequency [THz]', 'FontSize', 14);
 title('Gold Reference Transfer Function', 'FontSize', 15);
 
 subplot(1, 2, 2);
-plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on;
+plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on;
 plot(f_plot/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 2);
 legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
 xlabel('Frequency [THz]', 'FontSize', 14);
