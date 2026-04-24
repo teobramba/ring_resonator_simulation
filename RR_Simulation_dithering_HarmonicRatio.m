@@ -1,4 +1,4 @@
-%% PIC Simulation - Ring Resonator testing with two LED sources
+%% PIC Simulation - Ring Resonator testing, how lithography impacts Ring transfer functions
 % Matteo Brambilla - 2026
 clear; clc; close all;
 c = 299792458;                % Speed of light [m/s]

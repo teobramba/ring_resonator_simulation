@@ -1,32 +1,47 @@
 %% PIC Simulation - Ring Resonator testing, Gold standard heater + DUT + grating coupler
 % Matteo Brambilla - 2026
+
 clear; clc; close all;
 c = 299792458;                % Speed of light [m/s]
 
 %% 1. User-Defined Parameters 
-lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold; 
-FSR_gold = 100e9;             B_gold = 10e9;                
-ng = 4.2;                     neff = 2.45;                  
+lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold;
+lambda_0_DUT = 1550e-9;       f_0_DUT = c / lambda_0_DUT;
+FSR_gold = 100e9;             B_gold = 10e9;
+FSR_DUT = 100e9;               B_DUT = 10e9;
+ng = 4.2;                     neff = 2.45;
 Ptot = 1e-3;
 alpha_db_cm = 2;
 
 % Heating parameters
-d_neff_th = 1.86e-4;          R_heater = 100;               
-R_thermal = 1e3;              
+d_neff_th = 1.86e-4;          R_heater = 100;
+R_thermal = 1e3;
 
 %% 2. Design the RR
-[FSR_real, R_real, K1_gold, K2_gold, alpha_crit] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
-K1_gold = 0.291;     % Tuned value for best coupling and maximum Extintion Ratio FSR100G, B10G
-fspan = 10 * FSR_gold;
-f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 5000);
-P_gold = ring_simulate_K(f, f_0_gold, R_real, K1_gold, K2_gold, ng, neff, alpha_db_cm);       % P GOLD
-% P_gold = ones(size(P_gold)); % decomment to have no gold ring, constant
+% Gold standard parameters
+[FSR_real_gold, R_real_gold, K1_gold, K2_gold] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
+% K1_gold = 0.291;     % Tuned value for best coupling and maximum Extintion Ratio FSR100G, B10G
+fprintf('--- Gold characteristics ---\n');
+fprintf('FSR_gold:          %.2f GHz\n', FSR_real_gold/1e9);
+fprintf('BW_gold:           %.2f GHz\n', B_gold/1e9);
+fprintf('Radius_gold:       %.2f um\n', R_real_gold*1e6);
+fprintf('Coupling gold:     %.3f \n\n', K1_gold);
+
+% DUT parameters
+[FSR_real_DUT, R_real_DUT, K1_DUT_ideal, K2_DUT_ideal] = ring_design(lambda_0_DUT, FSR_DUT, ng, neff, B_DUT);
+fprintf('--- DUT characteristics ---\n');
+fprintf('FSR_DUT:           %.2f GHz\n', FSR_real_DUT/1e9);
+fprintf('BW_DUT:            %.2f GHz\n', B_DUT/1e9);
+fprintf('Radius_DUT:        %.2f um\n', R_real_DUT*1e6);
+fprintf('Coupling DUT:      %.3f \n\n', K1_DUT_ideal);
 
 %% Define the Grating Coupler transfer function
 % GC Parameters
 GC_BW_nm = 35;      % 35 nm GC Bandwidth
 GC_loss_dB = 3;     % 3dB GC loss at central frequency
 
+fspan_simul = 10 * FSR_gold;
+f = linspace(f_0_DUT - fspan_simul/2, f_0_DUT + fspan_simul/2, 5000);
 gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
 
 % % Plot the grating transfer function
@@ -36,11 +51,6 @@ gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
 % xlabel('Frequency [THz]', 'FontSize', 16);
 % ylabel('Loss [dB]', 'FontSize', 16);
 % grid on;
-
-%% 3. Define the DUT Parameters
-R_error = 100e-9;
-R_DUT = R_real + R_error;
-P_sweep = linspace(0, 30e-3, 400); 
 
 %% 4. Define the "LED" Source Profile 
 sigma_LED = 1 * FSR_gold; 
@@ -63,6 +73,7 @@ PSD_LED = PSD_LED_shape * normalization_factor;
 % fprintf('Image saved successfully as: %s\n', PSD_filename);
 
 % Setup Dither Parameters
+P_sweep = linspace(0, 30e-3, 400);
 A_dither = 0.5e-3;             % dither amplitude has major role
 n_cycles = 3;                  
 N_time = 180;                   
@@ -84,9 +95,9 @@ sin_3f = sin(3*phi_t);  cos_3f = cos(3*phi_t);
 %% DUT Coupling coefficient dependance on Gap
 evan_gamma = 0.02;                  % evanescent decay constant gamma for SOI [nm^-1]
 gap1 = 10;                          % gap distance error for coupler 1 [nm], best -4nm
-gap2 = -10;                          % gap distance error for coupler 2 [nm]
-K1_DUT = K1_gold*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
-K2_DUT = K2_gold*exp(-evan_gamma*gap2);   % DUT coupling coefficient 2
+gap2 = -10;                         % gap distance error for coupler 2 [nm]
+K1_DUT = K1_DUT_ideal*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
+K2_DUT = K2_DUT_ideal*exp(-evan_gamma*gap2);   % DUT coupling coefficient 2
 
 % %% Plot coupling dependance on gap distance
 % gap = linspace(0, 30, 100);
@@ -105,11 +116,13 @@ K2_DUT = K2_gold*exp(-evan_gamma*gap2);   % DUT coupling coefficient 2
 % title('Power Coupling coefficient dependance on gap distance', 'FontSize', 16);
 
 %% Comparison Gold-DUT Transfer functions
-fspan = FSR_gold;
-f_plot = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
+fspan_gold = FSR_gold;
+fspan_DUT = FSR_DUT;
+f_plot_gold = linspace(f_0_gold - fspan_gold/2, f_0_gold + fspan_gold/2, 10000);
+f_plot_DUT = linspace(f_0_DUT - fspan_DUT/2, f_0_DUT + fspan_DUT/2, 10000);
 
-P_gold_plot = ring_simulate_K(f_plot, f_0_gold, R_real, K1_gold, K2_gold, ng, neff, alpha_db_cm);
-P_DUT_plot = ring_simulate_K(f_plot, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff, alpha_db_cm);
+P_gold_plot = ring_simulate_K(f_plot_gold, f_0_gold, R_real_gold, K1_gold, K2_gold, ng, neff, alpha_db_cm);
+P_DUT_plot = ring_simulate_K(f_plot_DUT, f_0_DUT, R_real_DUT, K1_DUT, K2_DUT, ng, neff, alpha_db_cm);
 
 ER_gold = ext_ratio(P_gold_plot);
 ER_DUT = ext_ratio(P_DUT_plot);
@@ -126,21 +139,23 @@ fprintf('Extinction Ratio - DUT:    %.2f dB\n', ER_DUT);
 % legend({'Through'}, 'Location', 'southeast', 'FontSize', 14);
 % xlabel('Frequency [THz]', 'FontSize', 14);
 
-% %% Plot Gold vs DUT
-% figure;
-% subplot(1, 2, 1);
-% plot(f_plot/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on
-% plot(f_plot/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
-% legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
-% xlabel('Frequency [THz]', 'FontSize', 14);
-% title('Gold Reference Transfer Function', 'FontSize', 15);
-% 
-% subplot(1, 2, 2);
-% plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on;
-% plot(f_plot/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 2);
-% legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
-% xlabel('Frequency [THz]', 'FontSize', 14);
-% title('DUT Transfer Function', 'FontSize', 15);
+%% Plot Gold vs DUT
+figure;
+% Gold standart transfer function plot
+subplot(1, 2, 1);
+plot(f_plot_gold/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on
+plot(f_plot_gold/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
+legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
+xlabel('Frequency [THz]', 'FontSize', 14);
+title('Gold Reference Transfer Function', 'FontSize', 15);
+
+% DUT transfer function plot
+subplot(1, 2, 2);
+plot(f_plot_DUT/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on;
+plot(f_plot_DUT/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 2);
+legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
+xlabel('Frequency [THz]', 'FontSize', 14);
+title('DUT Transfer Function', 'FontSize', 15);
 
 %% --- Pre-allocate Arrays ---
 Power_TT = zeros(1, length(P_sweep)); Power_DD = zeros(1, length(P_sweep));
@@ -148,8 +163,10 @@ Power_DT = zeros(1, length(P_sweep)); Power_TD = zeros(1, length(P_sweep));
 H_TT = zeros(3, length(P_sweep));     H_DD = zeros(3, length(P_sweep));
 H_DT = zeros(3, length(P_sweep));     H_TD = zeros(3, length(P_sweep));
 
-P_thru_gold_coup = P_gold(:, 1) .* gratingCoupler'; 
-P_drop_gold_coup = P_gold(:, 2) .* gratingCoupler';
+P_DUT = ring_simulate_K(f, f_0_DUT, R_real_DUT, K1_DUT, K2_DUT, ng, neff, alpha_db_cm);       % P DUT
+
+P_thru_DUT_coup = P_DUT(:, 1) .* gratingCoupler';
+P_drop_DUT_coup = P_DUT(:, 2) .* gratingCoupler';
 
 colors = {'b', 'r', 'g'};
 harmonic_names = {'1f', '2f', '3f'};
@@ -159,10 +176,10 @@ harmonic_names = {'1f', '2f', '3f'};
 % =========================================================================
 fig_dashboard = figure('Name', 'Spectra, Power Dashboard and Harmonic analisys', 'Color', 'w', 'Position', [0, 20, 1920, 1000]);
 % Row 1: Spectrums
-ax_TT = subplot(4, 4, 1); plot(f/1e12, P_thru_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_TT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Through'); grid on; ylim([0 1.1]); ylabel('Transmission');
-ax_DD = subplot(4, 4, 2); plot(f/1e12, P_drop_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_DD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Drop'); grid on; ylim([0 1.1]);
-ax_DT = subplot(4, 4, 3); plot(f/1e12, P_drop_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_DT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Through'); grid on; ylim([0 1.1]);
-ax_TD = subplot(4, 4, 4); plot(f/1e12, P_thru_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_TD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Drop'); grid on; ylim([0 1.1]);
+ax_TT = subplot(4, 4, 1); plot(f/1e12, P_thru_DUT_coup, 'b', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_TT = plot(f/1e12, NaN(size(f)), 'r', 'LineWidth', 1.5); h_prod_TT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Through'); grid on; ylim([0 1.1]); ylabel('Transmission');
+ax_DD = subplot(4, 4, 2); plot(f/1e12, P_drop_DUT_coup, 'b', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_DD = plot(f/1e12, NaN(size(f)), 'r', 'LineWidth', 1.5); h_prod_DD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Drop'); grid on; ylim([0 1.1]);
+ax_DT = subplot(4, 4, 3); plot(f/1e12, P_thru_DUT_coup, 'b', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_DT = plot(f/1e12, NaN(size(f)), 'r', 'LineWidth', 1.5); h_prod_DT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Through'); grid on; ylim([0 1.1]);
+ax_TD = subplot(4, 4, 4); plot(f/1e12, P_drop_DUT_coup, 'b', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_TD = plot(f/1e12, NaN(size(f)), 'r', 'LineWidth', 1.5); h_prod_TD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Drop'); grid on; ylim([0 1.1]);
 
 % Row 2: Power Tracking
 subplot(4, 4, 5); h_track_TT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: TT'); xlabel('Heater (mW)'); ylabel('Output (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
@@ -192,10 +209,10 @@ for k = 1:length(P_sweep)
     
     dT_base = P_base * R_thermal;           
     neff_base = neff + (d_neff_th * dT_base);
-    P_DUT_base = ring_simulate_K(f, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff_base, alpha_db_cm);
+    P_gold_base = ring_simulate_K(f, f_0_gold, R_real_gold, K1_gold, K2_gold, ng, neff_base, alpha_db_cm);
     
-    P_thru_DUT_coup = P_DUT_base(:, 1) .* gratingCoupler';                % P COUPLER
-    P_drop_DUT_coup = P_DUT_base(:, 2) .* gratingCoupler';
+    P_thru_gold_coup = P_gold_base(:, 1) .* gratingCoupler';                % P GOLD
+    P_drop_gold_coup = P_gold_base(:, 2) .* gratingCoupler';
     
     % Integrated powers
     Power_TT(k) = trapz(f, (P_thru_gold_coup .* P_thru_DUT_coup) .* PSD_LED');
@@ -211,15 +228,15 @@ for k = 1:length(P_sweep)
         P_inst = P_base + A_dither * sin_1f(t_idx);
         dT_inst = P_inst * R_thermal;
         neff_inst = neff + (d_neff_th * dT_inst);
-        P_DUT_inst = ring_simulate_K(f, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff_inst, alpha_db_cm);
+        P_gold_inst = ring_simulate_K(f, f_0_gold, R_real_gold, K1_gold, K2_gold, ng, neff_inst, alpha_db_cm);
 
-        P_DUT_inst_thru_coup = P_DUT_inst(:, 1) .* gratingCoupler';
-        P_DUT_inst_drop_coup = P_DUT_inst(:, 2) .* gratingCoupler';
+        P_gold_inst_thru_coup = P_gold_inst(:, 1) .* gratingCoupler';       % P GOLD DITHER
+        P_gold_inst_drop_coup = P_gold_inst(:, 2) .* gratingCoupler';
         
-        P_out_TT_dith(t_idx) = trapz(f, (P_thru_gold_coup .* P_DUT_inst_thru_coup) .* PSD_LED');   % COUPLER
-        P_out_DD_dith(t_idx) = trapz(f, (P_drop_gold_coup .* P_DUT_inst_drop_coup) .* PSD_LED');
-        P_out_DT_dith(t_idx) = trapz(f, (P_drop_gold_coup .* P_DUT_inst_thru_coup) .* PSD_LED');
-        P_out_TD_dith(t_idx) = trapz(f, (P_thru_gold_coup .* P_DUT_inst_drop_coup) .* PSD_LED');
+        P_out_TT_dith(t_idx) = trapz(f, (P_thru_DUT_coup .* P_gold_inst_thru_coup) .* PSD_LED');
+        P_out_DD_dith(t_idx) = trapz(f, (P_drop_DUT_coup .* P_gold_inst_drop_coup) .* PSD_LED');
+        P_out_DT_dith(t_idx) = trapz(f, (P_drop_DUT_coup .* P_gold_inst_thru_coup) .* PSD_LED');
+        P_out_TD_dith(t_idx) = trapz(f, (P_thru_DUT_coup .* P_gold_inst_drop_coup) .* PSD_LED');
     end
     
     % --- Demodulation Amplitude ---
@@ -243,19 +260,21 @@ for k = 1:length(P_sweep)
     P_mw = P_sweep(1:k) * 1000; 
         
     % Update Figure 1
-    h_DUT_TT.YData = P_thru_DUT_coup; h_prod_TT.YData = P_thru_gold_coup .* P_thru_DUT_coup;
+    h_DUT_TT.YData = P_thru_gold_coup; h_prod_TT.YData = P_thru_gold_coup .* P_thru_DUT_coup;
     h_track_TT.XData = P_mw; h_track_TT.YData = Power_TT(1:k) * 1000;
     title(ax_TT, sprintf('Through-Through | \\DeltaT: %.2f °C', dT_base));
 
-    h_DUT_DD.YData = P_drop_DUT_coup; h_prod_DD.YData = P_drop_gold_coup .* P_drop_DUT_coup;
+    h_DUT_DD.YData = P_drop_gold_coup; h_prod_DD.YData = P_drop_gold_coup .* P_drop_DUT_coup;
     h_track_DD.XData = P_mw; h_track_DD.YData = Power_DD(1:k) * 1000;
     title(ax_DD, sprintf('Drop-Drop | \\DeltaT: %.2f °C', dT_base));
 
-    h_DUT_DT.YData = P_thru_DUT_coup; h_prod_DT.YData = P_drop_gold_coup .* P_thru_DUT_coup;
+    % DT = Drop gold + Through DUT
+    h_DUT_DT.YData = P_drop_gold_coup; h_prod_DT.YData = P_drop_gold_coup .* P_thru_DUT_coup; 
     h_track_DT.XData = P_mw; h_track_DT.YData = Power_DT(1:k) * 1000;
     title(ax_DT, sprintf('Drop-Through | \\DeltaT: %.2f °C', dT_base));
 
-    h_DUT_TD.YData = P_drop_DUT_coup; h_prod_TD.YData = P_thru_gold_coup .* P_drop_DUT_coup;
+    % TD = Through gold + Drop DUT
+    h_DUT_TD.YData = P_thru_gold_coup; h_prod_TD.YData = P_thru_gold_coup .* P_drop_DUT_coup;
     h_track_TD.XData = P_mw; h_track_TD.YData = Power_TD(1:k) * 1000;
     title(ax_TD, sprintf('Through-Drop | \\DeltaT: %.2f °C', dT_base));
 
