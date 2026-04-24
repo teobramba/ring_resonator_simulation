@@ -1,4 +1,4 @@
-%% PIC Simulation - Ring Resonator testing with Dithering & Ratio Analysis
+%% PIC Simulation - Ring Resonator testing with two LED sources
 % Matteo Brambilla - 2026
 clear; clc; close all;
 c = 299792458;                % Speed of light [m/s]
@@ -18,38 +18,54 @@ d_neff_th = 1.86e-4;          R_heater = 100;
 R_thermal = 1e3;              
 
 %% 2. Design the RR
-[FSR_real, R_real, K1, K2, alpha_crit] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
-%K1 = 0.291;     % Tuned value for best coupling and maximum Extintion Ratio
-fspan = 5 * FSR_gold;
-f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 1000);
-P_gold = ring_simulate_K(f, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
+[FSR_real, R_real, K1_gold, K2_gold, alpha_crit] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
+K1_gold = 0.291;     % Tuned value for best coupling and maximum Extintion Ratio FSR100G, B10G
+fspan = 10 * FSR_gold;
+f = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 5000);
+P_gold = ring_simulate_K(f, f_0_gold, R_real, K1_gold, K2_gold, ng, neff, alpha_db_cm);       % P GOLD
+% P_gold = ones(size(P_gold)); % decomment to have no gold ring, constant
 
-%% 3. Define the "LED" Source Profile 
-sigma_LED = FSR_gold; 
+%% Define the Grating Coupler transfer function
+% GC Parameters
+GC_BW_nm = 35;      % 35 nm GC Bandwidth
+GC_loss_dB = 3;     % 3dB GC loss at central frequency
+
+gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
+
+% % Plot the grating transfer function
+% figure;
+% plot(f/1e12, 10*log10(gratingCoupler), 'LineWidth', 2);
+% title('Grating Coupler Transfer Function', 'FontSize', 18);
+% xlabel('Frequency [THz]', 'FontSize', 16);
+% ylabel('Loss [dB]', 'FontSize', 16);
+% grid on;
+
+%% 3. Define the DUT Parameters
+R_error = 100e-9;
+R_DUT = R_real + R_error;
+P_sweep = linspace(0, 30e-3, 400); 
+
+%% 4. Define the "LED" Source Profile 
+sigma_LED = 1 * FSR_gold; 
 PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
 normalization_factor = Ptot / trapz(f, PSD_LED_shape);
 PSD_LED = PSD_LED_shape * normalization_factor;
 
-%% Plot LED Power Spectrum Density
-PSD_LED_fig = figure('Position', [20, 30, 700, 700]);
-plot(f/1e12, PSD_LED, 'LineWidth', 2);
-title('LED Power Spectrum Density Profile', 'FontSize', 18);
-xlabel('Frequency [THz]', 'FontSize', 16);
-ylabel('PSD [mW/Hz]', 'FontSize', 16);
-grid on;
+% %% Plot LED Power Spectrum Density
+% PSD_LED_fig = figure('Position', [20, 30, 700, 700]);
+% plot(f/1e12, PSD_LED, 'LineWidth', 2, 'Color', 'g');
+% title('LED Power Spectrum Density Profile', 'FontSize', 18);
+% xlabel('Frequency [THz]', 'FontSize', 16);
+% ylabel('PSD [mW/Hz]', 'FontSize', 16);
+% grid on;
 
-%% Export PSD graph
-% Define the file name
-PSD_filename = 'LED PSD.png';
-exportgraphics(PSD_LED_fig, PSD_filename , 'Resolution', 300);
-fprintf('Image saved successfully as: %s\n', PSD_filename);
+% %% Export PSD graph
+% % Define the file name
+% PSD_filename = 'LED PSD.png';
+% exportgraphics(PSD_LED_fig, PSD_filename , 'Resolution', 300);
+% fprintf('Image saved successfully as: %s\n', PSD_filename);
 
-%% 4. Define the DUT Parameters
-R_error = 0e-9;          
-R_DUT = R_real + R_error;   
-P_sweep = linspace(0, 30e-3, 400); 
-
-% --- Setup Dither Parameters ---
+% Setup Dither Parameters
 A_dither = 0.5e-3;             % dither amplitude has major role
 n_cycles = 3;                  
 N_time = 180;                   
@@ -59,44 +75,43 @@ sin_1f = sin(phi_t);    cos_1f = cos(phi_t);
 sin_2f = sin(2*phi_t);  cos_2f = cos(2*phi_t);
 sin_3f = sin(3*phi_t);  cos_3f = cos(3*phi_t);
 
-
-%% plot the sin(phi_t) signal
-figure
-plot(phi_t, A_dither*1000*sin_1f, 'LineWidth', 2);
-xlabel('Phase (rad)', 'FontSize', 14);
-ylabel('Power (mW)', 'FontSize', 14);
-ylim([-0.53, 0.53]);
-grid on
-title('Dither Signal (sine)', 'FontSize', 16);
+% %% plot the sin(phi_t) signal
+% figure
+% plot(phi_t, A_dither*1000*sin_1f, 'LineWidth', 2);
+% xlabel('Phase (rad)', 'FontSize', 14);
+% ylabel('Power (mW)', 'FontSize', 14);
+% ylim([-0.53, 0.53]);
+% grid on
+% title('Dither Signal (sine)', 'FontSize', 16);
 
 %% DUT Coupling coefficient dependance on Gap
 evan_gamma = 0.02;                  % evanescent decay constant gamma for SOI [nm^-1]
 gap1 = 10;                          % gap distance error for coupler 1 [nm], best -4nm
 gap2 = -10;                          % gap distance error for coupler 2 [nm]
-K1_DUT = K1*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
-K2_DUT = K2*exp(-evan_gamma*gap2);   % DUT coupling coefficient 2
+K1_DUT = K1_gold*exp(-evan_gamma*gap1);   % DUT coupling coefficient 1
+K2_DUT = K2_gold*exp(-evan_gamma*gap2);   % DUT coupling coefficient 2
 
-%% Plot coupling dependance on gap distance
-gap = linspace(0, 30, 100);
-K1_plot = K1 * exp(-evan_gamma * gap);   % DUT coupling coefficient for varying gap
-K2_plot = K2 * exp(evan_gamma * gap);   % DUT coupling coefficient for varying gap
-
-figure;
-plot(gap, K1_plot, "LineWidth", 2, "Color", 'r');   hold on;
-plot(gap, K2_plot, "LineWidth", 2, "Color", 'b');
-xlabel('Gap distance (nm)', 'FontSize', 14);
-ylabel('Power Coupling Coefficient', 'FontSize', 14);
-
-legend({'K1', 'K2'}, 'Location', 'northwest', 'FontSize', 14);
-% ylim([-0.13, 0.13]);
-grid on
-title('Power Coupling coefficient dependance on gap distance', 'FontSize', 16);
+% %% Plot coupling dependance on gap distance
+% gap = linspace(0, 30, 100);
+% K1_plot = K1 * exp(-evan_gamma * gap);   % DUT coupling coefficient for varying gap
+% K2_plot = K2 * exp(evan_gamma * gap);   % DUT coupling coefficient for varying gap
+% 
+% figure;
+% plot(gap, K1_plot, "LineWidth", 2, "Color", 'r');   hold on;
+% plot(gap, K2_plot, "LineWidth", 2, "Color", 'b');
+% xlabel('Gap distance (nm)', 'FontSize', 14);
+% ylabel('Power Coupling Coefficient', 'FontSize', 14);
+% 
+% legend({'K1', 'K2'}, 'Location', 'northwest', 'FontSize', 14);
+% % ylim([-0.13, 0.13]);
+% grid on
+% title('Power Coupling coefficient dependance on gap distance', 'FontSize', 16);
 
 %% Comparison Gold-DUT Transfer functions
 fspan = FSR_gold;
 f_plot = linspace(f_0_gold - fspan/2, f_0_gold + fspan/2, 10000);
 
-P_gold_plot = ring_simulate_K(f_plot, f_0_gold, R_real, K1, K2, ng, neff, alpha_db_cm);
+P_gold_plot = ring_simulate_K(f_plot, f_0_gold, R_real, K1_gold, K2_gold, ng, neff, alpha_db_cm);
 P_DUT_plot = ring_simulate_K(f_plot, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff, alpha_db_cm);
 
 ER_gold = ext_ratio(P_gold_plot);
@@ -107,28 +122,28 @@ fprintf('--- Extinction Ratio ---\n');
 fprintf('Extinction Ratio - Gold:   %.2f dB\n', ER_gold);
 fprintf('Extinction Ratio - DUT:    %.2f dB\n', ER_DUT);
 
-%% Extintion Ratio Explanation Plot
-figure;
-plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); grid on;
-title('DUT Through Port', 'FontSize', 15);
-legend({'Through'}, 'Location', 'southeast', 'FontSize', 14);
-xlabel('Frequency [THz]', 'FontSize', 14);
+% %% Plot Extintion Ratio Explanation
+% figure;
+% plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); grid on;
+% title('DUT Through Port', 'FontSize', 15);
+% legend({'Through'}, 'Location', 'southeast', 'FontSize', 14);
+% xlabel('Frequency [THz]', 'FontSize', 14);
 
-%% Gold vs DUT plot
-figure;
-subplot(1, 2, 1);
-plot(f_plot/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on
-plot(f_plot/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
-legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
-xlabel('Frequency [THz]', 'FontSize', 14);
-title('Gold Reference Transfer Function', 'FontSize', 15);
-
-subplot(1, 2, 2);
-plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on;
-plot(f_plot/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 2);
-legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
-xlabel('Frequency [THz]', 'FontSize', 14);
-title('DUT Transfer Function', 'FontSize', 15);
+% %% Plot Gold vs DUT
+% figure;
+% subplot(1, 2, 1);
+% plot(f_plot/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on
+% plot(f_plot/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
+% legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
+% xlabel('Frequency [THz]', 'FontSize', 14);
+% title('Gold Reference Transfer Function', 'FontSize', 15);
+% 
+% subplot(1, 2, 2);
+% plot(f_plot/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on;
+% plot(f_plot/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 2);
+% legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 14);
+% xlabel('Frequency [THz]', 'FontSize', 14);
+% title('DUT Transfer Function', 'FontSize', 15);
 
 %% --- Pre-allocate Arrays ---
 Power_TT = zeros(1, length(P_sweep)); Power_DD = zeros(1, length(P_sweep));
@@ -136,7 +151,8 @@ Power_DT = zeros(1, length(P_sweep)); Power_TD = zeros(1, length(P_sweep));
 H_TT = zeros(3, length(P_sweep));     H_DD = zeros(3, length(P_sweep));
 H_DT = zeros(3, length(P_sweep));     H_TD = zeros(3, length(P_sweep));
 
-P_thru_gold = P_gold(:, 1); P_drop_gold = P_gold(:, 2);
+P_thru_gold_coup = P_gold(:, 1) .* gratingCoupler'; 
+P_drop_gold_coup = P_gold(:, 2) .* gratingCoupler';
 
 colors = {'b', 'r', 'g'};
 harmonic_names = {'1f', '2f', '3f'};
@@ -146,10 +162,10 @@ harmonic_names = {'1f', '2f', '3f'};
 % =========================================================================
 fig_dashboard = figure('Name', 'Spectra, Power Dashboard and Harmonic analisys', 'Color', 'w', 'Position', [0, 20, 1920, 1000]);
 % Row 1: Spectrums
-ax_TT = subplot(4, 4, 1); plot(f/1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_TT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Through'); grid on; ylim([0 1.1]); ylabel('Transmission');
-ax_DD = subplot(4, 4, 2); plot(f/1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_DD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Drop'); grid on; ylim([0 1.1]);
-ax_DT = subplot(4, 4, 3); plot(f/1e12, P_drop_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_DT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Through'); grid on; ylim([0 1.1]);
-ax_TD = subplot(4, 4, 4); plot(f/1e12, P_thru_gold, 'r', 'LineWidth', 1.5); hold on; h_DUT_TD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Drop'); grid on; ylim([0 1.1]);
+ax_TT = subplot(4, 4, 1); plot(f/1e12, P_thru_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_TT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Through'); grid on; ylim([0 1.1]); ylabel('Transmission');
+ax_DD = subplot(4, 4, 2); plot(f/1e12, P_drop_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_DD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Drop'); grid on; ylim([0 1.1]);
+ax_DT = subplot(4, 4, 3); plot(f/1e12, P_drop_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_DT = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_DT = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Drop-Through'); grid on; ylim([0 1.1]);
+ax_TD = subplot(4, 4, 4); plot(f/1e12, P_thru_gold_coup, 'r', 'LineWidth', 1.5); hold on; plot(f/1e12, PSD_LED/max(PSD_LED), 'LineWidth', 2, 'Color', 'g'); h_DUT_TD = plot(f/1e12, NaN(size(f)), 'b--', 'LineWidth', 1.5); h_prod_TD = plot(f/1e12, NaN(size(f)), 'k', 'LineWidth', 2); title('Through-Drop'); grid on; ylim([0 1.1]);
 
 % Row 2: Power Tracking
 subplot(4, 4, 5); h_track_TT = plot(NaN, NaN, 'k-o', 'LineWidth', 1.5, 'MarkerFaceColor', 'r'); title('Power Track: TT'); xlabel('Heater (mW)'); ylabel('Output (mW)'); grid on; xlim([0 max(P_sweep)*1000]);
@@ -181,66 +197,69 @@ for k = 1:length(P_sweep)
     neff_base = neff + (d_neff_th * dT_base);
     P_DUT_base = ring_simulate_K(f, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff_base, alpha_db_cm);
     
-    P_thru_DUT = P_DUT_base(:, 1);
-    P_drop_DUT = P_DUT_base(:, 2);
+    P_thru_DUT_coup = P_DUT_base(:, 1) .* gratingCoupler';                % P COUPLER
+    P_drop_DUT_coup = P_DUT_base(:, 2) .* gratingCoupler';
     
-    % Standard integrated powers
-    Power_TT(k) = trapz(f, (P_thru_gold .* P_thru_DUT) .* PSD_LED');
-    Power_DD(k) = trapz(f, (P_drop_gold .* P_drop_DUT) .* PSD_LED');
-    Power_DT(k) = trapz(f, (P_drop_gold .* P_thru_DUT) .* PSD_LED');
-    Power_TD(k) = trapz(f, (P_thru_gold .* P_drop_DUT) .* PSD_LED');
+    % Integrated powers
+    Power_TT(k) = trapz(f, (P_thru_gold_coup .* P_thru_DUT_coup) .* PSD_LED');
+    Power_DD(k) = trapz(f, (P_drop_gold_coup .* P_drop_DUT_coup) .* PSD_LED');
+    Power_DT(k) = trapz(f, (P_drop_gold_coup .* P_thru_DUT_coup) .* PSD_LED');
+    Power_TD(k) = trapz(f, (P_thru_gold_coup .* P_drop_DUT_coup) .* PSD_LED');
     
     % --- Time-Domain Dither Loop ---
-    P_out_TT_t = zeros(1, N_time); P_out_DD_t = zeros(1, N_time);
-    P_out_DT_t = zeros(1, N_time); P_out_TD_t = zeros(1, N_time);
+    P_out_TT_dith = zeros(1, N_time); P_out_DD_dith = zeros(1, N_time);
+    P_out_DT_dith = zeros(1, N_time); P_out_TD_dith = zeros(1, N_time);
     
     for t_idx = 1:N_time
         P_inst = P_base + A_dither * sin_1f(t_idx);
         dT_inst = P_inst * R_thermal;
         neff_inst = neff + (d_neff_th * dT_inst);
         P_DUT_inst = ring_simulate_K(f, f_0_gold, R_DUT, K1_DUT, K2_DUT, ng, neff_inst, alpha_db_cm);
+
+        P_DUT_inst_thru_coup = P_DUT_inst(:, 1) .* gratingCoupler';
+        P_DUT_inst_drop_coup = P_DUT_inst(:, 2) .* gratingCoupler';
         
-        P_out_TT_t(t_idx) = trapz(f, (P_thru_gold .* P_DUT_inst(:, 1)) .* PSD_LED');
-        P_out_DD_t(t_idx) = trapz(f, (P_drop_gold .* P_DUT_inst(:, 2)) .* PSD_LED');
-        P_out_DT_t(t_idx) = trapz(f, (P_drop_gold .* P_DUT_inst(:, 1)) .* PSD_LED');
-        P_out_TD_t(t_idx) = trapz(f, (P_thru_gold .* P_DUT_inst(:, 2)) .* PSD_LED');
+        P_out_TT_dith(t_idx) = trapz(f, (P_thru_gold_coup .* P_DUT_inst_thru_coup) .* PSD_LED');   % COUPLER
+        P_out_DD_dith(t_idx) = trapz(f, (P_drop_gold_coup .* P_DUT_inst_drop_coup) .* PSD_LED');
+        P_out_DT_dith(t_idx) = trapz(f, (P_drop_gold_coup .* P_DUT_inst_thru_coup) .* PSD_LED');
+        P_out_TD_dith(t_idx) = trapz(f, (P_thru_gold_coup .* P_DUT_inst_drop_coup) .* PSD_LED');
     end
     
-    % --- Demodulation ---
-    H_TT(1, k) = 2 * sqrt(mean(P_out_TT_t .* sin_1f)^2 + mean(P_out_TT_t .* cos_1f)^2);
-    H_TT(2, k) = 2 * sqrt(mean(P_out_TT_t .* sin_2f)^2 + mean(P_out_TT_t .* cos_2f)^2);
-    H_TT(3, k) = 2 * sqrt(mean(P_out_TT_t .* sin_3f)^2 + mean(P_out_TT_t .* cos_3f)^2);
+    % --- Demodulation Amplitude ---
+    H_TT(1, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_1f)^2 + mean(P_out_TT_dith .* cos_1f)^2);
+    H_TT(2, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_2f)^2 + mean(P_out_TT_dith .* cos_2f)^2);
+    H_TT(3, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_3f)^2 + mean(P_out_TT_dith .* cos_3f)^2);
     
-    H_DD(1, k) = 2 * sqrt(mean(P_out_DD_t .* sin_1f)^2 + mean(P_out_DD_t .* cos_1f)^2);
-    H_DD(2, k) = 2 * sqrt(mean(P_out_DD_t .* sin_2f)^2 + mean(P_out_DD_t .* cos_2f)^2);
-    H_DD(3, k) = 2 * sqrt(mean(P_out_DD_t .* sin_3f)^2 + mean(P_out_DD_t .* cos_3f)^2);
+    H_DD(1, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_1f)^2 + mean(P_out_DD_dith .* cos_1f)^2);
+    H_DD(2, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_2f)^2 + mean(P_out_DD_dith .* cos_2f)^2);
+    H_DD(3, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_3f)^2 + mean(P_out_DD_dith .* cos_3f)^2);
 
-    H_DT(1, k) = 2 * sqrt(mean(P_out_DT_t .* sin_1f)^2 + mean(P_out_DT_t .* cos_1f)^2);
-    H_DT(2, k) = 2 * sqrt(mean(P_out_DT_t .* sin_2f)^2 + mean(P_out_DT_t .* cos_2f)^2);
-    H_DT(3, k) = 2 * sqrt(mean(P_out_DT_t .* sin_3f)^2 + mean(P_out_DT_t .* cos_3f)^2);
+    H_DT(1, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_1f)^2 + mean(P_out_DT_dith .* cos_1f)^2);
+    H_DT(2, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_2f)^2 + mean(P_out_DT_dith .* cos_2f)^2);
+    H_DT(3, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_3f)^2 + mean(P_out_DT_dith .* cos_3f)^2);
 
-    H_TD(1, k) = 2 * sqrt(mean(P_out_TD_t .* sin_1f)^2 + mean(P_out_TD_t .* cos_1f)^2);
-    H_TD(2, k) = 2 * sqrt(mean(P_out_TD_t .* sin_2f)^2 + mean(P_out_TD_t .* cos_2f)^2);
-    H_TD(3, k) = 2 * sqrt(mean(P_out_TD_t .* sin_3f)^2 + mean(P_out_TD_t .* cos_3f)^2);
+    H_TD(1, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_1f)^2 + mean(P_out_TD_dith .* cos_1f)^2);
+    H_TD(2, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_2f)^2 + mean(P_out_TD_dith .* cos_2f)^2);
+    H_TD(3, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_3f)^2 + mean(P_out_TD_dith .* cos_3f)^2);
 
     % --- Update Animation (Only if enabled) ---
     if enable_animation
         P_mw = P_sweep(1:k) * 1000; 
         
         % Update Figure 1
-        h_DUT_TT.YData = P_thru_DUT; h_prod_TT.YData = P_thru_gold .* P_thru_DUT;
+        h_DUT_TT.YData = P_thru_DUT_coup; h_prod_TT.YData = P_thru_gold_coup .* P_thru_DUT_coup;
         h_track_TT.XData = P_mw; h_track_TT.YData = Power_TT(1:k) * 1000;
         title(ax_TT, sprintf('Through-Through | \\DeltaT: %.2f °C', dT_base));
 
-        h_DUT_DD.YData = P_drop_DUT; h_prod_DD.YData = P_drop_gold .* P_drop_DUT;
+        h_DUT_DD.YData = P_drop_DUT_coup; h_prod_DD.YData = P_drop_gold_coup .* P_drop_DUT_coup;
         h_track_DD.XData = P_mw; h_track_DD.YData = Power_DD(1:k) * 1000;
         title(ax_DD, sprintf('Drop-Drop | \\DeltaT: %.2f °C', dT_base));
 
-        h_DUT_DT.YData = P_thru_DUT; h_prod_DT.YData = P_drop_gold .* P_thru_DUT;
+        h_DUT_DT.YData = P_thru_DUT_coup; h_prod_DT.YData = P_drop_gold_coup .* P_thru_DUT_coup;
         h_track_DT.XData = P_mw; h_track_DT.YData = Power_DT(1:k) * 1000;
         title(ax_DT, sprintf('Drop-Through | \\DeltaT: %.2f °C', dT_base));
 
-        h_DUT_TD.YData = P_drop_DUT; h_prod_TD.YData = P_thru_gold .* P_drop_DUT;
+        h_DUT_TD.YData = P_drop_DUT_coup; h_prod_TD.YData = P_thru_gold_coup .* P_drop_DUT_coup;
         h_track_TD.XData = P_mw; h_track_TD.YData = Power_TD(1:k) * 1000;
         title(ax_TD, sprintf('Through-Drop | \\DeltaT: %.2f °C', dT_base));
 
@@ -270,16 +289,16 @@ if ~enable_animation
     P_mw = P_sweep * 1000;
     
     % [Same assignment logic as Step D, applied to full arrays]
-    h_DUT_TT.YData = P_thru_DUT; h_prod_TT.YData = P_thru_gold .* P_thru_DUT;
+    h_DUT_TT.YData = P_thru_DUT_coup; h_prod_TT.YData = P_thru_gold_coup .* P_thru_DUT_coup;
     h_track_TT.XData = P_mw; h_track_TT.YData = Power_TT * 1000;
     
-    h_DUT_DD.YData = P_drop_DUT; h_prod_DD.YData = P_drop_gold .* P_drop_DUT;
+    h_DUT_DD.YData = P_drop_DUT_coup; h_prod_DD.YData = P_drop_gold_coup .* P_drop_DUT_coup;
     h_track_DD.XData = P_mw; h_track_DD.YData = Power_DD * 1000;
     
-    h_DUT_DT.YData = P_thru_DUT; h_prod_DT.YData = P_drop_gold .* P_thru_DUT;
+    h_DUT_DT.YData = P_thru_DUT_coup; h_prod_DT.YData = P_drop_gold_coup .* P_thru_DUT_coup;
     h_track_DT.XData = P_mw; h_track_DT.YData = Power_DT * 1000;
     
-    h_DUT_TD.YData = P_drop_DUT; h_prod_TD.YData = P_thru_gold .* P_drop_DUT;
+    h_DUT_TD.YData = P_drop_DUT_coup; h_prod_TD.YData = P_thru_gold_coup .* P_drop_DUT_coup;
     h_track_TD.XData = P_mw; h_track_TD.YData = Power_TD * 1000;
     
     for i=1:3
