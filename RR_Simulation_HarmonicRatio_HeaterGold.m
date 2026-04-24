@@ -7,8 +7,8 @@ c = 299792458;                % Speed of light [m/s]
 %% 1. User-Defined Parameters 
 lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold;
 lambda_0_DUT = 1550e-9;       f_0_DUT = c / lambda_0_DUT;
-FSR_gold = 100e9;             B_gold = 10e9;
-FSR_DUT = 100e9;               B_DUT = 10e9;
+FSR_gold = 200e9;             B_gold = 5e9;
+FSR_DUT = 70e9;               B_DUT = 10e9;
 ng = 4.2;                     neff = 2.45;
 Ptot = 1e-3;
 alpha_db_cm = 2;
@@ -53,7 +53,7 @@ gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
 % grid on;
 
 %% 4. Define the "LED" Source Profile 
-sigma_LED = 1 * FSR_gold; 
+sigma_LED = 0.1 * FSR_gold; 
 PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
 normalization_factor = Ptot / trapz(f, PSD_LED_shape);
 PSD_LED = PSD_LED_shape * normalization_factor;
@@ -299,14 +299,14 @@ fprintf('Sweep complete.\n');
 
 %% 6.5 Add Footer Text to Figure
 % Construct the string with all simulation parameters
-footer_str = sprintf(['\\lambda_0: %.0f nm, FSR: %.1f GHz, B: %.1f GHz, ' ...
-    '\\alpha: %.1f dB/cm, R_{err}: %.1f nm, A_{dith}: %.2f mW, ' ...
+footer_str = sprintf(['\\lambda_0: %.0f nm, FSR_g: %.1f GHz, B_g: %.1f GHz, ' ...
+    '\\alpha: %.1f dB/cm, R_{DUT}: %.1f um, A_{dith}: %.2f mW, ' ...
     '\\sigma_{LED}: %.1f GHz, \\gamma_{evan}: %.3f nm^{-1}, gap1: %.1f nm, gap2: %.1f nm'], ...
-    lambda_0_gold*1e9, ...           % lambda_0 in nm
+    lambda_0_DUT*1e9, ...           % lambda_0 in nm
     FSR_gold/1e9, ...                % FSR in GHz
     B_gold/1e9, ...                  % B in GHz
     alpha_db_cm, ...                 % Loss
-    R_error*1e9, ...                 % Radius error in nm
+    R_real_DUT*1e6, ...              % DUT Radius in um
     A_dither*1000, ...               % Dither in mW
     sigma_LED/1e9, ...               % LED Sigma in GHz
     evan_gamma, ...                  % Evanescent gamma
