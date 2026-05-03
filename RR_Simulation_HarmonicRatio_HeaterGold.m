@@ -7,7 +7,8 @@ c = 299792458;                % Speed of light [m/s]
 %% 1. User-Defined Parameters 
 lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold;
 lambda_0_DUT = 1550e-9;       f_0_DUT = c / lambda_0_DUT;
-FSR_gold = 200e9;             B_gold = 5e9;
+lambda_0_LED = 1550.5e-9;     f_0_LED = c / lambda_0_LED;
+FSR_gold = 300e9;             B_gold = 2e9;
 FSR_DUT = 70e9;               B_DUT = 10e9;
 ng = 4.2;                     neff = 2.45;
 Ptot = 1e-3;
@@ -20,6 +21,7 @@ R_thermal = 1e3;
 %% 2. Design the RR
 % Gold standard parameters
 [FSR_real_gold, R_real_gold, K1_gold, K2_gold] = ring_design(lambda_0_gold, FSR_gold, ng, neff, B_gold);
+K1_gold = K1_gold + K1_gold*0.5;
 % K1_gold = 0.291;     % Tuned value for best coupling and maximum Extintion Ratio FSR100G, B10G
 fprintf('--- Gold characteristics ---\n');
 fprintf('FSR_gold:          %.2f GHz\n', FSR_real_gold/1e9);
@@ -40,7 +42,7 @@ fprintf('Coupling DUT:      %.3f \n\n', K1_DUT_ideal);
 GC_BW_nm = 35;      % 35 nm GC Bandwidth
 GC_loss_dB = 3;     % 3dB GC loss at central frequency
 
-fspan_simul = 10 * FSR_gold;
+fspan_simul = 3 * FSR_gold;
 f = linspace(f_0_DUT - fspan_simul/2, f_0_DUT + fspan_simul/2, 5000);
 gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
 
@@ -52,11 +54,38 @@ gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
 % ylabel('Loss [dB]', 'FontSize', 16);
 % grid on;
 
-%% 4. Define the "LED" Source Profile 
-sigma_LED = 0.1 * FSR_gold; 
-PSD_LED_shape = exp(-((f - f_0_gold).^2) / (2 * sigma_LED^2));
-normalization_factor = Ptot / trapz(f, PSD_LED_shape);
-PSD_LED = PSD_LED_shape * normalization_factor;
+%% 3. Define the Broad LED and Apply Flat-Top Filter
+% wide raw LED 
+sigma_raw_LED = 2 * FSR_gold; 
+PSD_raw_shape = exp(-((f - f_0_LED).^2) / (2 * sigma_raw_LED^2));
+norm_factor = Ptot / trapz(f, PSD_raw_shape);
+PSD_LED_raw = PSD_raw_shape * norm_factor;
+
+% Flat-Top Filter Parameters
+filter_BW = FSR_gold - 0.2 * FSR_gold;    % Bandwidth of the rectangle
+filter_order = 7;                 % Steepness (1 = rounded, 4 = flat-top, 10 = rectangle)
+filter_IL_dB = 2;                 % Insertion Loss of the filter [dB]
+
+% Convert dB loss to a linear transmission multiplier
+T_max_filter = 10^(-filter_IL_dB / 10);
+
+% Super-Gaussian Transfer Function
+% The formula: T * exp( -0.5 * | (f - f_0) / (BW / 2) | ^ (2 * order) )
+T_flat_top = T_max_filter * exp(-0.5 * (abs(f - f_0_LED) / (filter_BW / 2)).^(2 * filter_order));
+
+% Apply filtering (Multiply LED and filter)
+PSD_LED = PSD_LED_raw .* T_flat_top;
+
+% Plot LED PSD and Filtering process
+figure('Name', 'LED Filtering Process', 'Color', 'w', 'Position', [100, 100, 800, 500]);
+plot(f/1e12, PSD_LED_raw / max(PSD_LED_raw), 'k--', 'LineWidth', 1.5); hold on;
+plot(f/1e12, T_flat_top, 'b', 'LineWidth', 1.5);
+plot(f/1e12, PSD_LED / max(PSD_LED_raw), 'r', 'LineWidth', 2);
+title('Creating a Flat-Top LED Source', 'FontSize', 15);
+xlabel('Frequency [THz]', 'FontSize', 14);
+ylabel('Normalized Power / Transmission', 'FontSize', 14);
+legend({'1. Raw Broad LED', '2. Super-Gaussian Filter', '3. Final Filtered LED'}, 'Location', 'northeast');
+grid on;
 
 % %% Plot LED Power Spectrum Density
 % PSD_LED_fig = figure('Position', [20, 30, 700, 700]);
@@ -71,8 +100,7 @@ PSD_LED = PSD_LED_shape * normalization_factor;
 % PSD_filename = 'LED PSD.png';
 % exportgraphics(PSD_LED_fig, PSD_filename , 'Resolution', 300);
 % fprintf('Image saved successfully as: %s\n', PSD_filename);
-
-% Setup Dither Parameters
+%% Setup Dither Parameters
 P_sweep = linspace(0, 30e-3, 400);
 A_dither = 0.5e-3;             % dither amplitude has major role
 n_cycles = 3;                  
@@ -239,22 +267,41 @@ for k = 1:length(P_sweep)
         P_out_TD_dith(t_idx) = trapz(f, (P_thru_DUT_coup .* P_gold_inst_drop_coup) .* PSD_LED');
     end
     
-    % --- Demodulation Amplitude ---
-    H_TT(1, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_1f)^2 + mean(P_out_TT_dith .* cos_1f)^2);
-    H_TT(2, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_2f)^2 + mean(P_out_TT_dith .* cos_2f)^2);
-    H_TT(3, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_3f)^2 + mean(P_out_TT_dith .* cos_3f)^2);
-    
-    H_DD(1, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_1f)^2 + mean(P_out_DD_dith .* cos_1f)^2);
-    H_DD(2, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_2f)^2 + mean(P_out_DD_dith .* cos_2f)^2);
-    H_DD(3, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_3f)^2 + mean(P_out_DD_dith .* cos_3f)^2);
+    % % --- Demodulation Amplitude ---
+    % H_TT(1, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_1f)^2 + mean(P_out_TT_dith .* cos_1f)^2);
+    % H_TT(2, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_2f)^2 + mean(P_out_TT_dith .* cos_2f)^2);
+    % H_TT(3, k) = 2 * sqrt(mean(P_out_TT_dith .* sin_3f)^2 + mean(P_out_TT_dith .* cos_3f)^2);
+    % 
+    % H_DD(1, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_1f)^2 + mean(P_out_DD_dith .* cos_1f)^2);
+    % H_DD(2, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_2f)^2 + mean(P_out_DD_dith .* cos_2f)^2);
+    % H_DD(3, k) = 2 * sqrt(mean(P_out_DD_dith .* sin_3f)^2 + mean(P_out_DD_dith .* cos_3f)^2);
+    % 
+    % H_DT(1, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_1f)^2 + mean(P_out_DT_dith .* cos_1f)^2);
+    % H_DT(2, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_2f)^2 + mean(P_out_DT_dith .* cos_2f)^2);
+    % H_DT(3, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_3f)^2 + mean(P_out_DT_dith .* cos_3f)^2);
+    % 
+    % H_TD(1, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_1f)^2 + mean(P_out_TD_dith .* cos_1f)^2);
+    % H_TD(2, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_2f)^2 + mean(P_out_TD_dith .* cos_2f)^2);
+    % H_TD(3, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_3f)^2 + mean(P_out_TD_dith .* cos_3f)^2);
 
-    H_DT(1, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_1f)^2 + mean(P_out_DT_dith .* cos_1f)^2);
-    H_DT(2, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_2f)^2 + mean(P_out_DT_dith .* cos_2f)^2);
-    H_DT(3, k) = 2 * sqrt(mean(P_out_DT_dith .* sin_3f)^2 + mean(P_out_DT_dith .* cos_3f)^2);
+    % --- Demodulation (In-Phase / Signed Amplitude) ---
+    % 1f is in-phase with sin(wt) -> Proportional to 1st Derivative
+    H_TT(1, k) = 2 * mean(P_out_TT_dith .* sin_1f);
+    H_DD(1, k) = 2 * mean(P_out_DD_dith .* sin_1f);
+    H_DT(1, k) = 2 * mean(P_out_DT_dith .* sin_1f);
+    H_TD(1, k) = 2 * mean(P_out_TD_dith .* sin_1f);
 
-    H_TD(1, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_1f)^2 + mean(P_out_TD_dith .* cos_1f)^2);
-    H_TD(2, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_2f)^2 + mean(P_out_TD_dith .* cos_2f)^2);
-    H_TD(3, k) = 2 * sqrt(mean(P_out_TD_dith .* sin_3f)^2 + mean(P_out_TD_dith .* cos_3f)^2);
+    % 2f is in-phase with -cos(2wt) -> Proportional to 2nd Derivative
+    H_TT(2, k) = -2 * mean(P_out_TT_dith .* cos_2f);
+    H_DD(2, k) = -2 * mean(P_out_DD_dith .* cos_2f);
+    H_DT(2, k) = -2 * mean(P_out_DT_dith .* cos_2f);
+    H_TD(2, k) = -2 * mean(P_out_TD_dith .* cos_2f);
+
+    % 3f is in-phase with -sin(3wt) -> Proportional to 3rd Derivative
+    H_TT(3, k) = -2 * mean(P_out_TT_dith .* sin_3f);
+    H_DD(3, k) = -2 * mean(P_out_DD_dith .* sin_3f);
+    H_DT(3, k) = -2 * mean(P_out_DT_dith .* sin_3f);
+    H_TD(3, k) = -2 * mean(P_out_TD_dith .* sin_3f);
 
     % --- Update Animation (Only if enabled) ---
     P_mw = P_sweep(1:k) * 1000; 
@@ -301,14 +348,14 @@ fprintf('Sweep complete.\n');
 % Construct the string with all simulation parameters
 footer_str = sprintf(['\\lambda_0: %.0f nm, FSR_g: %.1f GHz, B_g: %.1f GHz, ' ...
     '\\alpha: %.1f dB/cm, R_{DUT}: %.1f um, A_{dith}: %.2f mW, ' ...
-    '\\sigma_{LED}: %.1f GHz, \\gamma_{evan}: %.3f nm^{-1}, gap1: %.1f nm, gap2: %.1f nm'], ...
+    '\\filterBW: %.1f GHz, \\gamma_{evan}: %.3f nm^{-1}, gap1: %.1f nm, gap2: %.1f nm'], ...
     lambda_0_DUT*1e9, ...           % lambda_0 in nm
     FSR_gold/1e9, ...                % FSR in GHz
     B_gold/1e9, ...                  % B in GHz
     alpha_db_cm, ...                 % Loss
     R_real_DUT*1e6, ...              % DUT Radius in um
     A_dither*1000, ...               % Dither in mW
-    sigma_LED/1e9, ...               % LED Sigma in GHz
+    filter_BW/1e9, ...               % LED Sigma in GHz
     evan_gamma, ...                  % Evanescent gamma
     gap1, ...                        % Gap 1 error
     gap2);                           % Gap 2 error
