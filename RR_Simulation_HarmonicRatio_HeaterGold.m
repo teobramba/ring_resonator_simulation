@@ -5,11 +5,11 @@ clear; clc; close all;
 c = 299792458;                % Speed of light [m/s]
 
 %% 1. User-Defined Parameters 
-lambda_0_gold = 1550e-9;      f_0_gold = c / lambda_0_gold;
+lambda_0_gold = 1549.7e-9;      f_0_gold = c / lambda_0_gold;
 lambda_0_DUT = 1550e-9;       f_0_DUT = c / lambda_0_DUT;
 lambda_0_LED = 1550.5e-9;     f_0_LED = c / lambda_0_LED;
 FSR_gold = 300e9;             B_gold = 2e9;
-FSR_DUT = 70e9;               B_DUT = 10e9;
+FSR_DUT = 100e9;              B_DUT = 30e9;
 ng = 4.2;                     neff = 2.45;
 Ptot = 1e-3;
 alpha_db_cm = 2;
@@ -40,7 +40,7 @@ fprintf('Coupling DUT:      %.3f \n\n', K1_DUT_ideal);
 %% Define the Grating Coupler transfer function
 % GC Parameters
 GC_BW_nm = 35;      % 35 nm GC Bandwidth
-GC_loss_dB = 3;     % 3dB GC loss at central frequency
+GC_loss_dB = 0;     % 3dB GC loss at central frequency
 
 fspan_simul = 3 * FSR_gold;
 f = linspace(f_0_DUT - fspan_simul/2, f_0_DUT + fspan_simul/2, 5000);
@@ -56,13 +56,13 @@ gratingCoupler = grat_coupler(f, f_0_gold, GC_BW_nm, GC_loss_dB);
 
 %% 3. Define the Broad LED and Apply Flat-Top Filter
 % wide raw LED 
-sigma_raw_LED = 2 * FSR_gold; 
+sigma_raw_LED = 5 * FSR_gold; 
 PSD_raw_shape = exp(-((f - f_0_LED).^2) / (2 * sigma_raw_LED^2));
 norm_factor = Ptot / trapz(f, PSD_raw_shape);
 PSD_LED_raw = PSD_raw_shape * norm_factor;
 
 % Flat-Top Filter Parameters
-filter_BW = FSR_gold - 0.2 * FSR_gold;    % Bandwidth of the rectangle
+filter_BW = FSR_gold;    % Bandwidth of the rectangle
 filter_order = 7;                 % Steepness (1 = rounded, 4 = flat-top, 10 = rectangle)
 filter_IL_dB = 2;                 % Insertion Loss of the filter [dB]
 
@@ -101,7 +101,8 @@ grid on;
 % exportgraphics(PSD_LED_fig, PSD_filename , 'Resolution', 300);
 % fprintf('Image saved successfully as: %s\n', PSD_filename);
 %% Setup Dither Parameters
-P_sweep = linspace(0, 30e-3, 400);
+P_heater_max = 20e-3;
+P_sweep = linspace(0, P_heater_max, 400);
 A_dither = 0.5e-3;             % dither amplitude has major role
 n_cycles = 3;                  
 N_time = 180;                   
@@ -154,11 +155,6 @@ P_DUT_plot = ring_simulate_K(f_plot_DUT, f_0_DUT, R_real_DUT, K1_DUT, K2_DUT, ng
 
 ER_gold = ext_ratio(P_gold_plot);
 ER_DUT = ext_ratio(P_DUT_plot);
-
-% Stamp the Extintion ratio values
-fprintf('--- Extinction Ratio ---\n');
-fprintf('Extinction Ratio - Gold:   %.2f dB\n', ER_gold);
-fprintf('Extinction Ratio - DUT:    %.2f dB\n', ER_DUT);
 
 % %% Plot Extintion Ratio Explanation
 % figure;
@@ -383,3 +379,77 @@ image_filename = 'Full Dashboard (1550nm, FSR100G, B10G, alpha0, A_dith0.5m, sig
 exportgraphics(fig_dashboard, image_filename, 'Resolution', 300);
 
 fprintf('Image saved successfully as: %s\n', image_filename);
+
+%% 8. Verify the Extintion Ratio
+
+simPower = [Power_DT' , zeros(size(Power_DT'))];
+ER_gold_DUT_conv = ext_ratio(simPower);
+
+% Stamp the Extintion ratio values
+fprintf('--- Extinction Ratio ---\n');
+fprintf('Extinction Ratio - Gold:     %.2f dB\n', ER_gold);
+fprintf('Extinction Ratio - DUT:      %.2f dB\n', ER_DUT);
+fprintf('Extinction Ratio - Series:   %.2f dB\n', ER_gold_DUT_conv);
+
+% Compute the convolution of the 2 ring transfer functions
+fspan_gold = FSR_gold;
+% Rename to f_plot_gold to match the rest of the script consistently
+f_plot_gold = linspace(f_0_gold - fspan_gold/2, f_0_gold + fspan_gold/2, 10000); 
+
+% Calculate frequency step (df) to scale the convolution properly
+df = f_plot_gold(2) - f_plot_gold(1);
+
+P_gold_plot = ring_simulate_K(f_plot_gold, f_0_gold, R_real_gold, K1_gold, K2_gold, ng, neff, alpha_db_cm);
+
+% Assuming f_0_DUT and FSR_DUT are defined earlier in your code
+P_DUT_plot = ring_simulate_K(f_plot_gold, f_0_DUT, R_real_DUT, K1_DUT, K2_DUT, ng, neff, alpha_db_cm);
+
+%% --- NEW CONVOLUTION LOGIC ---
+% 1. Limit the transfer function of the DUT to only one FSR_DUT around its center
+% Create a logical mask (1 inside the window, 0 outside)
+DUT_mask = (f_plot_gold >= (f_0_DUT - FSR_DUT)) & (f_plot_gold <= (f_0_DUT + FSR_DUT));
+
+% Apply the mask (transpose DUT_mask to column vector if necessary)
+P_DUT_limited_thru = P_DUT_plot(:, 1) .* DUT_mask'; 
+P_DUT_limited_drop = P_DUT_plot(:, 2) .* DUT_mask';
+
+% 2. Convolve the Drop port of Gold with Through and Drop of DUT
+% Use 'same' to keep the output array exactly 10000 points long for plotting
+conv_thru = conv(P_gold_plot(:, 2), P_DUT_limited_thru, 'same') * df;
+conv_drop = conv(P_gold_plot(:, 2), P_DUT_limited_drop, 'same') * df;
+
+% Create the new variable containing both
+P_gold_DUT = [conv_thru, conv_drop];
+
+% Optional: Normalize the convolution to a max of 1 so it plots nicely on the same Y-axis
+P_gold_DUT(:, 1) = P_gold_DUT(:, 1) / max(P_gold_DUT(:, 1)) * 0.804;
+P_gold_DUT(:, 2) = P_gold_DUT(:, 2) / max(P_gold_DUT(:, 2)) * 0.804;
+
+%% Plot Gold vs DUT with Convolution
+figure('Name', 'Ring Resonator Convolution Analysis', 'Color', 'w', 'Position', [100, 100, 1200, 500]);
+
+% --- Gold Standard Transfer Function Plot ---
+subplot(1, 2, 1);
+plot(f_plot_gold/1e12, P_gold_plot(:, 1), "Color", 'r', "LineWidth", 2); hold on; grid on
+plot(f_plot_gold/1e12, P_gold_plot(:, 2), "Color", 'b', "LineWidth", 2);
+legend({'Through', 'Drop'}, 'Location', 'northwest', 'FontSize', 12);
+xlabel('Frequency [THz]', 'FontSize', 14);
+ylabel('Transmission', 'FontSize', 14);
+title('Gold Reference Transfer Function', 'FontSize', 15);
+ylim([0 1.1]);
+
+% --- DUT Transfer Function Plot (+ Convolution) ---
+subplot(1, 2, 2);
+% Original DUT
+plot(f_plot_gold/1e12, P_DUT_plot(:, 1), "Color", 'r', "LineWidth", 1.5, "LineStyle", "--"); hold on; grid on;
+plot(f_plot_gold/1e12, P_DUT_plot(:, 2), "Color", 'b', "LineWidth", 1.5, "LineStyle", "--");
+
+% Convolution Results (Plotted in Green)
+plot(f_plot_gold/1e12, P_gold_DUT(:, 1), "Color", [0 0.8 0], "LineWidth", 2); % Darker green for visibility
+plot(f_plot_gold/1e12, P_gold_DUT(:, 2), "Color", [0 1 0], "LineWidth", 2);   % Bright green
+
+legend({'DUT Through', 'DUT Drop', 'Conv (Gold Drop * DUT Thru)', 'Conv (Gold Drop * DUT Drop)'}, ...
+    'Location', 'northwest', 'FontSize', 11);
+xlabel('Frequency [THz]', 'FontSize', 14);
+title('DUT Transfer Function & Convolutions', 'FontSize', 15);
+ylim([0 1.1]);
